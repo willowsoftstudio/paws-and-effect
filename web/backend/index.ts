@@ -404,9 +404,15 @@ app.get("/", (req, res) => {
       React.useEffect(() => {
         // Create initial session & fetch recommendation lists
         fetch("/api/pets/gid%3A%2F%2Fshopify%2FCustomer%2F123/recommendations", { headers })
-          .then(res => res.json())
+          .then(res => {
+            if (!res.ok) throw new Error("HTTP error " + res.status);
+            return res.json();
+          })
           .then(data => {
             if (data.recommendations) setRecs(data.recommendations);
+          })
+          .catch(err => {
+            console.warn("[Paws UI Warning] Failed to load recommendations:", err.message);
           });
       }, [plan]);
 
@@ -416,12 +422,18 @@ app.get("/", (req, res) => {
           headers,
           body: JSON.stringify({ plan: targetPlan })
         })
-          .then(res => res.json())
+          .then(res => {
+            if (!res.ok) throw new Error("Upgrade request failed");
+            return res.json();
+          })
           .then(data => {
             if (data.success) {
               setPlan(data.plan);
               setToast("Plan upgraded to " + data.plan + " successfully!");
             }
+          })
+          .catch(err => {
+            setToast("🔒 Upgrade failed: " + err.message);
           });
       };
 
@@ -648,9 +660,11 @@ app.get("/", (req, res) => {
       ]);
     }
 
-    const container = document.getElementById("app");
-    const root = ReactDOM.createRoot(container);
-    root.render(e(App));
+    window.onload = () => {
+      const container = document.getElementById("app");
+      const root = ReactDOM.createRoot(container);
+      root.render(e(App));
+    };
   </script>
 </body>
 </html>
