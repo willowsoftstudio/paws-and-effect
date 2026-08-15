@@ -321,6 +321,7 @@ app.get("/", (req, res) => {
 <head>
   <meta charset="UTF-8">
   <title>Paws & Effect — Pet Profile Admin</title>
+  <meta name="shopify-api-key" content="${process.env.SHOPIFY_API_KEY}" />
   <!-- Load Shopify Polaris CSS for official merchant look & feel -->
   <link rel="stylesheet" href="https://unpkg.com/@shopify/polaris@12.0.0/build/esm/styles.css">
   <style>
