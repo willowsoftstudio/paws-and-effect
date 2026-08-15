@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Environment Variables & Secrets
+.env
+.env.local
+.env.*.local
+
+# Build Outputs
+dist/
+build/
+
+# Local CLI States
+.shopify/
+.vercel/
+
+# Test Outputs
+test-results/
+playwright-report/
+coverage/
+
+# OS Files
+.DS_Store

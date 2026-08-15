@@ -1,0 +1,59 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Session {
+  id                  String    @id
+  shop                String
+  state               String
+  isOnline            Boolean   @default(false)
+  isPremium           Boolean   @default(false)
+  plan                String    @default("STARTER") // "STARTER", "PRO", "ENTERPRISE"
+  scope               String?
+  expires             DateTime?
+  accessToken         String
+  userId              BigInt?
+  firstName           String?
+  lastName            String?
+  email               String?
+  accountOwner        Boolean?
+  locale              String?
+  collaborator        Boolean?
+}
+
+model PetProfile {
+  id            String      @id @default(uuid())
+  customerId    String      // Shopify Customer GID
+  shop          String      // Associated merchant shop domain
+  name          String
+  petType       String      // "dog", "cat", "bird", "other"
+  breed         String?
+  age           Int?
+  weight        Float?
+  activityLevel String?     // "lazy", "moderate", "active"
+  allergies     String[]    // Array of allergens
+  healthIssues  String[]    // Array of health tags
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  healthLogs    HealthLog[]
+
+  @@index([customerId])
+  @@index([shop])
+}
+
+model HealthLog {
+  id            String     @id @default(uuid())
+  petId         String
+  pet           PetProfile @relation(fields: [petId], references: [id], onDelete: Cascade)
+  weight        Float?
+  activityScore Int?       // Scale 1-10
+  notes         String?
+  logDate       DateTime   @default(now())
+
+  @@index([petId])
+}
