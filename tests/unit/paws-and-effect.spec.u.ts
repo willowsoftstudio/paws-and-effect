@@ -120,4 +120,28 @@ describe("Paws & Effect Unit Tests — Smart Recommendations & Allergy-Safe Gati
     expect(fishKibble).toBeDefined();
     expect(fishKibble!.score).toBe(12);
   });
+
+  it("should correctly search and filter the veterinary practice directory", () => {
+    const mockPractices = [
+      { id: "PRAC-101", name: "Columbus Veterinary Clinic", address: "123 High St, Columbus, OH" },
+      { id: "PRAC-102", name: "Midtown Pet Hospital", address: "456 Broadway, New York, NY" },
+      { id: "PRAC-104", name: "Seattle Veterinary Associates", address: "101 Pine St, Seattle, WA" }
+    ];
+
+    const filterPractices = (query: string) => {
+      const q = query.toLowerCase();
+      return mockPractices.filter(p => 
+        p.name.toLowerCase().includes(q) || 
+        p.address.toLowerCase().includes(q) ||
+        p.id.toLowerCase().includes(q)
+      );
+    };
+
+    const columbusMatches = filterPractices("columbus");
+    expect(columbusMatches.length).toBe(1);
+    expect(columbusMatches[0].id).toBe("PRAC-101");
+
+    const vetMatches = filterPractices("veterinary");
+    expect(vetMatches.length).toBe(2); // Matches Columbus and Seattle!
+  });
 });

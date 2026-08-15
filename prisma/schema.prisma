@@ -24,6 +24,12 @@ model Session {
   accountOwner        Boolean?
   locale              String?
   collaborator        Boolean?
+
+  // Veterinary Integration Credentials (Enterprise)
+  vetProvider         String    @default("NONE") // "NONE", "COVETRUS", "VETSOURCE"
+  vetClientKey        String?
+  vetClientSecret     String?
+  vetPracticeId       String?
 }
 
 model PetProfile {
@@ -38,6 +44,7 @@ model PetProfile {
   activityLevel String?     // "lazy", "moderate", "active"
   allergies     String[]    // Array of allergens
   healthIssues  String[]    // Array of health tags
+  prescriptionUrl String?    // Secure URL pointing to Vercel Blob / S3 storage
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
   healthLogs    HealthLog[]

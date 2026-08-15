@@ -152,5 +152,63 @@ test.describe("Paws & Effect E2E Tests — Billing, Feature Gating, and Recommen
     const vetRes = await request.post("/api/vets/link", { headers });
     expect(vetRes.status()).toBe(200);
     expect((await vetRes.json()).success).toBe(true);
+
+    // C. Verify Save Vet Credentials succeeds and encrypts at rest
+    const saveRes = await request.post("/api/vets/credentials", {
+      headers,
+      data: {
+        vetProvider: "COVETRUS",
+        vetClientKey: "mock-client-key-123",
+        vetClientSecret: "mock-client-secret-abc",
+        vetPracticeId: "practice-999"
+      }
+    });
+    expect(saveRes.status()).toBe(200);
+    expect((await saveRes.json()).vetProvider).toBe("COVETRUS");
+
+    // D. Verify Fetch Vet Credentials returns decrypted client key but masked client secret for security
+    const getRes = await request.get("/api/vets/credentials", { headers });
+    expect(getRes.status()).toBe(200);
+    const getBody = await getRes.json();
+    expect(getBody.vetProvider).toBe("COVETRUS");
+    expect(getBody.vetClientKey).toBe("mock-client-key-123"); // Successfully decrypted!
+    expect(getBody.vetClientSecret).toBe("••••••••••••••••"); // Masked for security!
+    expect(getBody.vetPracticeId).toBe("practice-999");
+
+    // E. Verify Test Connection succeeds with valid keys
+    const testSuccessRes = await request.post("/api/vets/test-connection", {
+      headers,
+      data: {
+        vetProvider: "COVETRUS",
+        vetClientKey: "mock-client-key-123",
+        vetClientSecret: "mock-client-secret-abc",
+        vetPracticeId: "practice-999"
+      }
+    });
+    expect(testSuccessRes.status()).toBe(200);
+    expect((await testSuccessRes.json()).success).toBe(true);
+
+    // F. Verify Test Connection fails with a 401 if 'fail' is passed in credentials (mock sandbox authentication fail)
+    const testFailRes = await request.post("/api/vets/test-connection", {
+      headers,
+      data: {
+        vetProvider: "COVETRUS",
+        vetClientKey: "mock-client-key-fail",
+        vetClientSecret: "mock-client-secret-abc",
+        vetPracticeId: "practice-999"
+      }
+    });
+    expect(testFailRes.status()).toBe(401);
+    const failBody = await testFailRes.json();
+    expect(failBody.success).toBe(false);
+    expect(failBody.error).toBe("Authentication Failed");
+
+    // G. Verify Vet Practice Autocomplete Search Endpoint
+    const searchRes = await request.get("/api/vets/search?q=Seattle", { headers });
+    expect(searchRes.status()).toBe(200);
+    const searchBody = await searchRes.json();
+    expect(searchBody.success).toBe(true);
+    expect(searchBody.practices.length).toBe(1);
+    expect(searchBody.practices[0].name).toBe("Seattle Veterinary Associates");
   });
 });

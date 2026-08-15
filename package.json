@@ -11,7 +11,8 @@
     "postinstall": "node scripts/postinstall.cjs",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
-    "deploy": "node scripts/deploy.cjs"
+    "deploy": "node scripts/deploy.cjs",
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

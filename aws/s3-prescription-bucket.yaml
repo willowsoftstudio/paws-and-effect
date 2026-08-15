@@ -1,0 +1,54 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Provision a secure, private Amazon S3 Bucket with default SSE encryption and CORS rules for Paws & Effect Prescription Uploads.'
+
+Parameters:
+  BucketName:
+    Type: String
+    Description: 'Unique name for your S3 bucket (e.g., paws-effect-prescriptions-preview).'
+    Default: 'paws-effect-prescriptions-preview'
+  
+  AllowedCorsOrigin:
+    Type: String
+    Description: 'Your Vercel deployment URL allowed to execute browser-direct uploads.'
+    Default: 'https://paws-and-effect-git-develop-willowsoftstudio-5437s-projects.vercel.app'
+
+Resources:
+  PrescriptionS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref BucketName
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - '*'
+            AllowedMethods:
+              - GET
+              - PUT
+              - POST
+              - HEAD
+            AllowedOrigins:
+              - !Ref AllowedCorsOrigin
+              - 'http://localhost:3001' # Supports local testing
+            ExposeHeaders:
+              - ETag
+            MaxAge: 3000
+
+Outputs:
+  BucketName:
+    Description: 'Name of the secure prescription S3 bucket.'
+    Value: !Ref PrescriptionS3Bucket
+  BucketARN:
+    Description: 'ARN of the secure prescription S3 bucket.'
+    Value: !GetAtt PrescriptionS3Bucket.Arn
+  BucketDomainName:
+    Description: 'Domain Name of the secure prescription S3 bucket.'
+    Value: !GetAtt PrescriptionS3Bucket.DomainName
