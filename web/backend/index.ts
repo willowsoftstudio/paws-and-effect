@@ -651,8 +651,8 @@ app.get("/", (req, res) => {
             boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
             zIndex: 9999,
             display: "flex",
-            justify-content: "space-between",
-            align-items: "center",
+            justifyContent: "space-between",
+            alignItems: "center",
             gap: "10px"
           }
         }, [
