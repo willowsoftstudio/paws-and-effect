@@ -1,0 +1,6 @@
+api_version = "2026-10"
+
+[[extensions]]
+name = "Pet Profile Quiz"
+handle = "pet-profile-quiz-block"
+type = "theme"

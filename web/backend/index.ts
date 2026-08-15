@@ -1,6 +1,8 @@
 import express from "express";
 import { PrismaClient } from "@prisma/client";
 import crypto from "crypto";
+import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const prisma = new PrismaClient();
 const app = express();
@@ -8,9 +10,51 @@ const port = process.env.PORT || 3001;
 
 app.use(express.json());
 
+// Strict Environment Gating Check (Fail-fast on missing keys in dev/production)
+const isTestMode = process.env.NODE_ENV === "test";
+
+if (!isTestMode) {
+  const REQUIRED_ENV_VARS = [
+    "DATABASE_URL",
+    "SHOPIFY_API_KEY",
+    "SHOPIFY_API_SECRET",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "S3_BUCKET_NAME",
+    "AWS_REGION"
+  ];
+
+  const missingVars = REQUIRED_ENV_VARS.filter(v => !process.env[v] || process.env[v].trim() === "");
+  if (missingVars.length > 0) {
+    console.error("\n==========================================================================");
+    console.error("❌ FATAL STARTUP ERROR: Missing Critical Environment Variables! ❌");
+    console.error("==========================================================================");
+    console.error("The following environment variables must be populated to prevent env-mixing:");
+    missingVars.forEach(v => console.error(`  - ${v}`));
+    console.error("==========================================================================\n");
+    process.exit(1); // Crash immediately!
+  }
+}
+
+// Initialize S3 Client dynamically using the .env credentials
+const s3 = new S3Client({
+  region: process.env.AWS_REGION || (isTestMode ? "us-east-1" : undefined),
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID || (isTestMode ? "mock-access-key" : ""),
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || (isTestMode ? "mock-secret-key" : "")
+  }
+});
+
+// Dynamic S3 Bucket Selection based on Environment (strictly fails if missing in production)
+const S3_BUCKET_NAME = process.env.S3_BUCKET_NAME || (isTestMode ? "paws-and-effect-storage-preview-preview" : "");
+
 // Secure AES-256-CBC at-rest encryption helpers derived from the unique SHOPIFY_API_SECRET
 const ENCRYPTION_ALGORITHM = "aes-256-cbc";
-const ENCRYPTION_KEY = crypto.scryptSync(process.env.SHOPIFY_API_SECRET || "default-secret-key-paws-effect-32", "salt", 32);
+const ENCRYPTION_KEY = crypto.scryptSync(
+  process.env.SHOPIFY_API_SECRET || (isTestMode ? "default-secret-key-paws-effect-32" : ""),
+  "salt",
+  32
+);
 
 function encrypt(text: string): string {
   if (!text) return "";
@@ -136,7 +180,7 @@ app.post("/api/pets/profile", validateSession, async (req, res) => {
     const existingProfiles = await prisma.petProfile.findMany({
       where: { shop: session.shop }
     });
-    const uniqueCustomerIds = new Set(existingProfiles.map(p => p.customerId));
+    const uniqueCustomerIds = new Set(existingProfiles.map((p: any) => p.customerId));
 
     const maxCustomers = session.plan === "STARTER" ? 500 : (session.plan === "PRO" ? 5000 : Infinity);
 
@@ -244,14 +288,14 @@ app.get("/api/pets/:customerId/recommendations", validateSession, async (req, re
     const allRecommendations = [];
 
     for (const pet of profiles) {
-      const petAllergies = pet.allergies.map(a => a.toLowerCase());
-      const petHealthIssues = pet.healthIssues.map(h => h.toLowerCase());
+      const petAllergies = pet.allergies.map((a: string) => a.toLowerCase());
+      const petHealthIssues = pet.healthIssues.map((h: string) => h.toLowerCase());
       const petBreed = pet.breed ? pet.breed.toLowerCase() : "";
       const petAge = pet.age || 0;
 
       // Filter products
       const recommendedForPet = MOCK_PRODUCTS.map(product => {
-        const prodAllergens = product.allergens.map(a => a.toLowerCase());
+        const prodAllergens = product.allergens.map((a: string) => a.toLowerCase());
         const isAllergic = prodAllergens.some(allergen => petAllergies.includes(allergen));
 
         // Scoring rules matching characteristics
@@ -491,6 +535,66 @@ app.get("/api/vets/search", validateSession, (req, res) => {
   );
 
   res.json({ success: true, practices: matches });
+});
+
+// 7f. AWS S3: Generate Secure Presigned PUT URL for Direct-to-S3 Uploads (Starter/Pro/Enterprise)
+app.post("/api/vets/presigned-upload-url", validateSession, async (req, res) => {
+  const { filename, contentType } = req.body;
+  const session = req.body.session;
+
+  if (!filename) {
+    return res.status(400).json({ error: "Missing filename parameter." });
+  }
+
+  const cleanFilename = filename.replace(/[^a-zA-Z0-9.-]/g, "_");
+  const objectKey = `prescriptions/${session.id}/${Date.now()}_${cleanFilename}`;
+
+  try {
+    const command = new PutObjectCommand({
+      Bucket: S3_BUCKET_NAME,
+      Key: objectKey,
+      ContentType: contentType || "application/pdf"
+    });
+
+    // Generate a secure PUT signed URL valid for 5 minutes
+    const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 300 });
+
+    res.json({ success: true, uploadUrl, objectKey });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to generate S3 upload signature", details: err.message });
+  }
+});
+
+// 7g. AWS S3: Generate Secure Presigned GET URL for Private View Access (Starter/Pro/Enterprise)
+app.get("/api/pets/presigned-view-url/:petProfileId", validateSession, async (req, res) => {
+  const { petProfileId } = req.params;
+  const session = req.body.session;
+
+  try {
+    const pet = await prisma.petProfile.findFirst({
+      where: { id: petProfileId, shop: session.shop }
+    });
+
+    if (!pet) {
+      return res.status(404).json({ error: "Pet profile not found" });
+    }
+
+    if (!pet.prescriptionUrl) {
+      return res.status(400).json({ error: "No prescription document uploaded for this pet." });
+    }
+
+    // Generate secure GET signed URL valid for 15 minutes (900 seconds)
+    const command = new GetObjectCommand({
+      Bucket: S3_BUCKET_NAME,
+      Key: pet.prescriptionUrl // Stores the S3 object key!
+    });
+
+    const viewUrl = await getSignedUrl(s3, command, { expiresIn: 900 });
+
+    res.json({ success: true, viewUrl });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to generate S3 view signature", details: err.message });
+  }
 });
 
 // 8. Serve beautiful, iframe-safe Shopify Polaris embedded App Dashboard

@@ -210,5 +210,41 @@ test.describe("Paws & Effect E2E Tests — Billing, Feature Gating, and Recommen
     expect(searchBody.success).toBe(true);
     expect(searchBody.practices.length).toBe(1);
     expect(searchBody.practices[0].name).toBe("Seattle Veterinary Associates");
+
+    // H. Verify S3 Secure Presigned PUT Upload URL Generation
+    const s3UploadRes = await request.post("/api/vets/presigned-upload-url", {
+      headers,
+      data: {
+        filename: "prescription_max.pdf",
+        contentType: "application/pdf"
+      }
+    });
+    expect(s3UploadRes.status()).toBe(200);
+    const s3UploadBody = await s3UploadRes.json();
+    expect(s3UploadBody.success).toBe(true);
+    expect(s3UploadBody.uploadUrl).toContain("amazonaws.com"); // Contains the real secure AWS signed URL!
+    expect(s3UploadBody.objectKey).toContain("prescriptions/");
+
+    // Retrieve Max's pet profile ID to test view URL
+    const profiles = await prisma.petProfile.findMany({ where: { shop: shopDomain, name: "Max" } });
+    expect(profiles.length).toBe(1);
+    const maxPetId = profiles[0].id;
+
+    // I. Verify S3 Secure Presigned GET View URL fails with 400 if no document key is registered yet
+    const s3ViewFailRes = await request.get(`/api/pets/presigned-view-url/${maxPetId}`, { headers });
+    expect(s3ViewFailRes.status()).toBe(400);
+    expect((await s3ViewFailRes.json()).error).toBe("No prescription document uploaded for this pet.");
+
+    // J. Manually inject a mock prescription key and verify GET View URL succeeds
+    await prisma.petProfile.update({
+      where: { id: maxPetId },
+      data: { prescriptionUrl: s3UploadBody.objectKey }
+    });
+
+    const s3ViewSuccessRes = await request.get(`/api/pets/presigned-view-url/${maxPetId}`, { headers });
+    expect(s3ViewSuccessRes.status()).toBe(200);
+    const s3ViewBody = await s3ViewSuccessRes.json();
+    expect(s3ViewBody.success).toBe(true);
+    expect(s3ViewBody.viewUrl).toContain("amazonaws.com"); // Contains the real secure AWS signed URL!
   });
 });
