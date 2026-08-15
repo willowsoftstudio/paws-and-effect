@@ -54,10 +54,6 @@ try {
   // Run Prisma Generate
   console.log("[Build Script] Running prisma generate...");
   execSync("prisma generate", { stdio: "inherit", env, cwd: appDir });
-
-  // Run Prisma DB Push
-  console.log("[Build Script] Running prisma db push...");
-  execSync("prisma db push", { stdio: "inherit", env, cwd: appDir });
 } catch (err) {
   console.error("[Build Script Error] Build step failed:", err.message);
   process.exit(1);
