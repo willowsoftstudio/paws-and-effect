@@ -298,6 +298,364 @@ app.post("/api/vets/link", validateSession, async (req, res) => {
   res.json({ success: true, message: "Vet linking portal initialized successfully." });
 });
 
+// 8. Serve beautiful, iframe-safe Shopify Polaris embedded App Dashboard
+app.get("/", (req, res) => {
+  const shop = req.query.shop as string;
+  if (shop && shop.endsWith(".myshopify.com")) {
+    const sanitizedShop = encodeURIComponent(shop);
+    res.setHeader(
+      "Content-Security-Policy",
+      `frame-ancestors https://${sanitizedShop} https://admin.shopify.com;`
+    );
+  } else {
+    res.setHeader(
+      "Content-Security-Policy",
+      "frame-ancestors https://admin.shopify.com https://*.myshopify.com;"
+    );
+  }
+  res.removeHeader("X-Frame-Options");
+
+  res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Paws & Effect — Pet Profile Admin</title>
+  <!-- Load Shopify Polaris CSS for official merchant look & feel -->
+  <link rel="stylesheet" href="https://unpkg.com/@shopify/polaris@12.0.0/build/esm/styles.css">
+  <style>
+    body {
+      background-color: #f6f6f7;
+      margin: 0;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    .grid-container {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 20px;
+    }
+    @media (max-width: 768px) {
+      .grid-container {
+        grid-template-columns: 1fr;
+      }
+    }
+    .banner {
+      background-color: #f0f4ff;
+      border: 1px solid #1c3d5a;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .badge {
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: bold;
+    }
+    .badge-starter { background-color: #e2e8f0; color: #4a5568; }
+    .badge-pro { background-color: #feebc8; color: #c05621; }
+    .badge-enterprise { background-color: #e0f2fe; color: #2b6cb0; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <!-- Load App Bridge, React, and ReactDOM -->
+  <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+  <script>
+    const e = React.createElement;
+
+    function App() {
+      const [plan, setPlan] = React.useState("STARTER");
+      const [petName, setPetName] = React.useState("");
+      const [petType, setPetType] = React.useState("dog");
+      const [breed, setBreed] = React.useState("");
+      const [age, setAge] = React.useState("");
+      const [weight, setWeight] = React.useState("");
+      const [activityLevel, setActivityLevel] = React.useState("moderate");
+      const [allergies, setAllergies] = React.useState("");
+      const [healthIssues, setHealthIssues] = React.useState("");
+      
+      const [profiles, setProfiles] = React.useState([]);
+      const [logs, setLogs] = React.useState([]);
+      const [reviews, setReviews] = React.useState([]);
+      const [recs, setRecs] = React.useState([]);
+      const [toast, setToast] = React.useState(null);
+
+      const shop = new URLSearchParams(window.location.search).get("shop") || "test-shop.myshopify.com";
+      const mockSessionId = "paws-portal-session";
+
+      // Common headers
+      const headers = {
+        "Content-Type": "application/json",
+        "x-test-session-id": mockSessionId,
+        "x-shop-domain": shop
+      };
+
+      // Sync active plan and recommendations on load
+      React.useEffect(() => {
+        // Create initial session & fetch recommendation lists
+        fetch("/api/pets/gid%3A%2F%2Fshopify%2FCustomer%2F123/recommendations", { headers })
+          .then(res => res.json())
+          .then(data => {
+            if (data.recommendations) setRecs(data.recommendations);
+          });
+      }, [plan]);
+
+      const handleUpgrade = (targetPlan) => {
+        fetch("/api/billing", {
+          method: "PATCH",
+          headers,
+          body: JSON.stringify({ plan: targetPlan })
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (data.success) {
+              setPlan(data.plan);
+              setToast("Plan upgraded to " + data.plan + " successfully!");
+            }
+          });
+      };
+
+      const handleCreateProfile = (ev) => {
+        ev.preventDefault();
+        fetch("/api/pets/profile", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            customerId: "gid://shopify/Customer/123",
+            name: petName,
+            petType,
+            breed,
+            age,
+            weight,
+            activityLevel,
+            allergies: allergies ? allergies.split(",").map(s => s.trim()) : [],
+            healthIssues: healthIssues ? healthIssues.split(",").map(s => s.trim()) : []
+          })
+        })
+          .then(res => {
+            if (res.status === 403) {
+              return res.json().then(err => {
+                setToast("❌ " + err.message);
+                throw new Error(err.message);
+              });
+            }
+            return res.json();
+          })
+          .then(data => {
+            if (data.success) {
+              setProfiles([...profiles, data.profile]);
+              setToast("🐾 Pet Profile for " + petName + " created!");
+              // Clear fields
+              setPetName("");
+              setBreed("");
+              setAge("");
+              setWeight("");
+              setAllergies("");
+              setHealthIssues("");
+              // Re-fetch recommendations
+              fetch("/api/pets/gid%3A%2F%2Fshopify%2FCustomer%2F123/recommendations", { headers })
+                .then(res => res.json())
+                .then(d => { if (d.recommendations) setRecs(d.recommendations); });
+            }
+          })
+          .catch(() => {});
+      };
+
+      const handleHealthTrack = (petId) => {
+        fetch("/api/pets/" + petId + "/health", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ weight: "35.2", activityScore: 8, notes: "Excellent weight and energy log" })
+        })
+          .then(res => {
+            if (res.status === 403) {
+              return res.json().then(err => { setToast("🔒 " + err.message); });
+            }
+            return res.json().then(data => {
+              if (data.success) {
+                setLogs([...logs, data.log]);
+                setToast("📈 Health logged successfully!");
+              }
+            });
+          });
+      };
+
+      const handleLoadReviews = () => {
+        fetch("/api/community/reviews", { headers })
+          .then(res => {
+            if (res.status === 403) {
+              return res.json().then(err => { setToast("🔒 " + err.message); });
+            }
+            return res.json().then(data => {
+              setReviews(data.reviews);
+            });
+          });
+      };
+
+      const handleVetLink = () => {
+        fetch("/api/vets/link", { method: "POST", headers })
+          .then(res => {
+            if (res.status === 403) {
+              return res.json().then(err => { setToast("🔒 " + err.message); });
+            }
+            return res.json().then(data => {
+              setToast("🏥 " + data.message);
+            });
+          });
+      };
+
+      return e("div", null, [
+        // Top Banner
+        e("div", { className: "banner" }, [
+          e("div", null, [
+            e("h1", { style: { margin: 0, fontSize: "20px" } }, "Paws & Effect 🐾"),
+            e("p", { style: { margin: "4px 0 0 0", color: "#6d7175" } }, "Personalized Pet Profiles & Allergen-Safe Subscription Optimization")
+          ]),
+          e("div", { style: { display: "flex", gap: "10px", alignItems: "center" } }, [
+            e("span", { className: "badge badge-" + plan.toLowerCase() }, plan),
+            e("button", { 
+              onClick: () => handleUpgrade(plan === "STARTER" ? "PRO" : "ENTERPRISE"),
+              style: { padding: "8px 12px", border: "1px solid #1c3d5a", borderRadius: "4px", backgroundColor: "#fff", cursor: "pointer" }
+            }, plan === "STARTER" ? "Upgrade to Pro" : (plan === "PRO" ? "Upgrade to Enterprise" : "Enterprise Active"))
+          ])
+        ]),
+
+        e("div", { className: "grid-container" }, [
+          // Left Column (Pet Profiles & Recommendations)
+          e("div", null, [
+            // Create Profile Form
+            e("div", { style: { backgroundColor: "#fff", padding: "20px", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)", marginBottom: "20px" } }, [
+              e("h2", { style: { marginTop: 0, fontSize: "16px" } }, "Create Pet Profile"),
+              e("form", { onSubmit: handleCreateProfile, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" } }, [
+                e("input", { placeholder: "Pet Name (e.g. Max)", value: petName, onChange: e => setPetName(e.target.value), required: true, style: { padding: "8px", borderRadius: "4px", border: "1px solid #c9cccf" } }),
+                e("select", { value: petType, onChange: e => setPetType(e.target.value), style: { padding: "8px", borderRadius: "4px", border: "1px solid #c9cccf" } }, [
+                  e("option", { value: "dog" }, "Dog"),
+                  e("option", { value: "cat" }, "Cat"),
+                  e("option", { value: "bird" }, "Bird"),
+                  e("option", { value: "other" }, "Other")
+                ]),
+                e("input", { placeholder: "Breed (e.g. Golden Retriever)", value: breed, onChange: e => setBreed(e.target.value), style: { padding: "8px", borderRadius: "4px", border: "1px solid #c9cccf" } }),
+                e("input", { placeholder: "Age (Years)", type: "number", value: age, onChange: e => setAge(e.target.value), style: { padding: "8px", borderRadius: "4px", border: "1px solid #c9cccf" } }),
+                e("input", { placeholder: "Weight (kg)", type: "number", value: weight, onChange: e => setWeight(e.target.value), style: { padding: "8px", borderRadius: "4px", border: "1px solid #c9cccf" } }),
+                e("select", { value: activityLevel, onChange: e => setActivityLevel(e.target.value), style: { padding: "8px", borderRadius: "4px", border: "1px solid #c9cccf" } }, [
+                  e("option", { value: "lazy" }, "Lazy / Inactive"),
+                  e("option", { value: "moderate" }, "Moderately Active"),
+                  e("option", { value: "active" }, "Highly Active")
+                ]),
+                e("input", { placeholder: "Allergies (comma separated, e.g. beef, chicken)", value: allergies, onChange: e => setAllergies(e.target.value), style: { padding: "8px", borderRadius: "4px", border: "1px solid #c9cccf", gridColumn: "span 2" } }),
+                e("input", { placeholder: "Health Issues (comma separated, e.g. joint, sensitive stomach)", value: healthIssues, onChange: e => setHealthIssues(e.target.value), style: { padding: "8px", borderRadius: "4px", border: "1px solid #c9cccf", gridColumn: "span 2" } }),
+                e("button", { type: "submit", style: { gridColumn: "span 2", padding: "10px", backgroundColor: "#008060", color: "#fff", border: "none", borderRadius: "4px", fontWeight: "bold", cursor: "pointer" } }, "🐾 Save Pet Profile")
+              ])
+            ]),
+
+            // Profiles list
+            profiles.length > 0 && e("div", { style: { backgroundColor: "#fff", padding: "20px", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)", marginBottom: "20px" } }, [
+              e("h2", { style: { marginTop: 0, fontSize: "16px" } }, "Active Profiles under Shop"),
+              profiles.map(p => e("div", { key: p.id, style: { padding: "10px", borderBottom: "1px solid #e1e3e5", display: "flex", justifyContent: "space-between", alignItems: "center" } }, [
+                e("div", null, [
+                  e("strong", null, p.name),
+                  e("span", { style: { color: "#6d7175", marginLeft: "10px" } }, p.breed + " (" + p.petType + ")")
+                ]),
+                e("button", { 
+                  onClick: () => handleHealthTrack(p.id),
+                  style: { padding: "4px 8px", backgroundColor: "#007ace", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "12px" }
+                }, "📈 Log Health")
+              ]))
+            ]),
+
+            // Smart Recommendation lists (Allergy safe)
+            e("div", { style: { backgroundColor: "#fff", padding: "20px", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" } }, [
+              e("h2", { style: { marginTop: 0, fontSize: "16px" } }, "Allergy-Safe Smart Product Recommendations"),
+              recs.length === 0 ? e("p", { style: { color: "#6d7175" } }, "No active recommendations. Create a pet profile above to see tailored formulas!") :
+                recs.map(pRec => e("div", { key: pRec.petName, style: { marginBottom: "16px", paddingBottom: "16px", borderBottom: "1px solid #e1e3e5" } }, [
+                  e("h3", { style: { margin: "0 0 8px 0", fontSize: "14px", color: "#008060" } }, "Tailored recommendations for " + pRec.petName + " (" + pRec.petType + "):"),
+                  pRec.recommendations.map(prod => e("div", { key: prod.id, style: { display: "flex", justifyContent: "space-between", padding: "8px", backgroundColor: "#f9fafb", borderRadius: "4px", marginBottom: "8px" } }, [
+                    e("div", null, [
+                      e("strong", null, prod.title),
+                      e("p", { style: { margin: "4px 0", fontSize: "12px", color: "#6d7175" } }, prod.description)
+                    ]),
+                    e("div", { style: { textAlign: "right", fontSize: "12px" } }, [
+                      e("span", { style: { color: "#008060", fontWeight: "bold" } }, "Score: " + prod.score),
+                      e("p", { style: { margin: "4px 0 0 0", fontSize: "10px", color: "#6d7175" } }, prod.matchingReasons.join(", "))
+                    ])
+                  ]))
+                ]))
+            ])
+          ]),
+
+          // Right Column (Paywall Gates / Log outputs)
+          e("div", null, [
+            // Health Logs Panel
+            e("div", { style: { backgroundColor: "#fff", padding: "20px", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)", marginBottom: "20px" } }, [
+              e("h2", { style: { marginTop: 0, fontSize: "14px" } }, "📈 Health Log Portal (Pro)"),
+              logs.length === 0 ? e("p", { style: { color: "#6d7175", fontSize: "12px" } }, "No health logs active. Click 'Log Health' on any pet above to add data (Requires Pro).") :
+                logs.map(l => e("div", { key: l.id, style: { padding: "8px", backgroundColor: "#f4f6f8", borderRadius: "4px", marginBottom: "8px", fontSize: "12px" } }, [
+                  e("strong", null, "Log: " + l.notes),
+                  e("p", { style: { margin: "4px 0 0 0" } }, "Weight: " + l.weight + "kg | Activity Score: " + l.activityScore + "/10")
+                ]))
+            ]),
+
+            // Community Feed (Pro gated)
+            e("div", { style: { backgroundColor: "#fff", padding: "20px", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)", marginBottom: "20px" } }, [
+              e("h2", { style: { marginTop: 0, fontSize: "14px" } }, "💬 Community & Breed Reviews (Pro)"),
+              e("button", { onClick: handleLoadReviews, style: { padding: "6px 12px", width: "100%", backgroundColor: "#fff", border: "1px solid #c9cccf", borderRadius: "4px", cursor: "pointer", fontWeight: "bold", marginBottom: "10px" } }, "🔄 Load Breed Reviews"),
+              reviews.length > 0 && reviews.map(r => e("div", { key: r.id, style: { padding: "8px", backgroundColor: "#f4f6f8", borderRadius: "4px", marginBottom: "8px", fontSize: "12px" } }, [
+                e("p", { style: { margin: "0 0 4px 0", fontWeight: "bold" } }, r.petBreed + " Feed - " + r.author),
+                e("p", { style: { margin: 0, color: "#6d7175" } }, r.body)
+              ]))
+            ]),
+
+            // Vet Link Gating (Enterprise)
+            e("div", { style: { backgroundColor: "#fff", padding: "20px", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" } }, [
+              e("h2", { style: { marginTop: 0, fontSize: "14px" } }, "🏥 Veterinary Integrations (Enterprise)"),
+              e("p", { style: { color: "#6d7175", fontSize: "12px", marginBottom: "12px" } }, "Link your Shopify store directly to licensed veterinarians for verified medical approvals and health recommendation overrides."),
+              e("button", { onClick: handleVetLink, style: { padding: "8px", width: "100%", backgroundColor: "#1c3d5a", color: "#fff", border: "none", borderRadius: "4px", fontWeight: "bold", cursor: "pointer" } }, "🔗 Link Vet Portal")
+            ])
+          ])
+        ]),
+
+        // Toast Messages
+        toast && e("div", {
+          style: {
+            position: "fixed",
+            bottom: "20px",
+            right: "20px",
+            backgroundColor: "#333",
+            color: "#fff",
+            padding: "12px 24px",
+            borderRadius: "8px",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+            zIndex: 9999,
+            display: "flex",
+            justify-content: "space-between",
+            align-items: "center",
+            gap: "10px"
+          }
+        }, [
+          e("span", null, toast),
+          e("button", { onClick: () => setToast(null), style: { background: "none", border: "none", color: "#fff", cursor: "pointer", fontWeight: "bold" } }, "✕")
+        ])
+      ]);
+    }
+
+    const container = document.getElementById("app");
+    const root = ReactDOM.createRoot(container);
+    root.render(e(App));
+  </script>
+</body>
+</html>
+  `);
+});
+
 app.listen(port, () => {
   console.log(`Paws & Effect listening on port ${port}`);
 });

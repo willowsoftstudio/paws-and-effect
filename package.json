@@ -10,7 +10,8 @@
     "build": "node scripts/build.cjs",
     "postinstall": "node scripts/postinstall.cjs",
     "db:push": "prisma db push",
-    "db:seed": "prisma db seed"
+    "db:seed": "prisma db seed",
+    "deploy": "node scripts/deploy.cjs"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

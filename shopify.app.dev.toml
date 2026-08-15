@@ -1,8 +1,8 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
-client_id = "5e33f10ff81d0679af7583e5ab5aac13" # Paste your Production Client ID here
-name = "Paws & Effect"
-application_url = "https://paws-and-effect.vercel.app"
+client_id = "c7cbedddd43c8d4c6e9b3afa427994f7"
+name = "Paws & Effect (Dev)"
+application_url = "https://paws-and-effect-git-develop-willowsoftstudio-5437s-projects.vercel.app"
 embedded = true
 
 [build]
@@ -16,5 +16,5 @@ scopes = "write_products,read_products,write_customers,read_customers,write_draf
 
 [auth]
 redirect_urls = [
-  "https://paws-and-effect.vercel.app/api/auth/callback"
+  "https://paws-and-effect-git-develop-willowsoftstudio-5437s-projects.vercel.app/api/auth/callback"
 ]
