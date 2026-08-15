@@ -10,6 +10,25 @@ const port = process.env.PORT || 3001;
 
 app.use(express.json());
 
+// Secure CORS Middleware for cross-origin storefront requests (allowing shop domains and localhost)
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && (origin.endsWith(".myshopify.com") || origin.includes("localhost") || origin.includes("vercel.app"))) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  } else {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+  }
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, x-test-session-id, x-shop-domain");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+
+  // Handle browser CORS preflight OPTIONS requests immediately
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204);
+  }
+  next();
+});
+
 // Strict Environment Gating Check (Fail-fast on missing keys in dev/production)
 const isTestMode = process.env.NODE_ENV === "test";
 

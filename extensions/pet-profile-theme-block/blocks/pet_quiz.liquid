@@ -163,6 +163,11 @@
     const closeBtn = document.getElementById("paws-effect-modal-close");
     const form = document.getElementById("paws-effect-quiz-form");
     
+    // Escape any relative/transformed parent containers by portaling the modal directly to document.body on load!
+    if (modal && modal.parentNode !== document.body) {
+      document.body.appendChild(modal);
+    }
+    
     // View Blocks
     const listView = document.getElementById("paws-effect-list-view");
     const formView = document.getElementById("paws-effect-form-view");
@@ -181,15 +186,22 @@
     const displayMode = "{{ block.settings.display_mode }}";
     const popupDelay = {{ block.settings.popup_delay }} * 1000;
 
-    // Mock Customer ID (in production, read from liquid {{ customer.id }})
-    const customerId = "gid://shopify/Customer/123";
+    // Dynamic Shop Domain resolved dynamically via Shopify Liquid!
+    const shopDomain = "{{ shop.permanent_domain }}";
+
+    // Dynamic Customer ID (resolved dynamically if logged in, fallback tovisitor ID for guest checkout!)
+    {% if customer %}
+      const customerId = "gid://shopify/Customer/{{ customer.id }}";
+    {% else %}
+      const customerId = "gid://shopify/Customer/123";
+    {% endif %}
 
     // 1. Fetch registered pets for customer on load
     function loadCustomerPets() {
-      fetch("https://paws-and-effect-git-develop-willowsoftstudio-5437s-projects.vercel.app/api/pets/gid%3A%2F%2Fshopify%2FCustomer%2F123/recommendations", {
+      fetch("https://paws-and-effect-git-develop-willowsoftstudio-5437s-projects.vercel.app/api/pets/" + encodeURIComponent(customerId) + "/recommendations", {
         headers: {
           "x-test-session-id": "paws-portal-session",
-          "x-shop-domain": "celestial-drift-5uuwyo06.myshopify.com"
+          "x-shop-domain": shopDomain
         }
       })
         .then(res => res.json())
@@ -200,13 +212,15 @@
             
             // Adjust storefront trigger button text
             if (customerPets.length > 0) {
-              trigger.innerText = "🐾 Manage My Pet Profiles";
+              if (trigger) trigger.innerText = "🐾 Manage My Pet Profiles";
             } else {
-              trigger.innerText = "🐾 Create Pet Profile";
+              if (trigger) trigger.innerText = "🐾 Create Pet Profile";
             }
           }
         })
-        .catch(() => {});
+        .catch(err => {
+          console.error("❌ Paws & Effect: Failed to load customer pets on startup:", err);
+        });
     }
 
     // 2. Render Pet profiles List inside Modal
@@ -219,7 +233,7 @@
 
       petsContainer.innerHTML = customerPets.map(pet => `
         <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #e1e3e5;">
-          <div>
+          <div style="text-align: left;">
             <div style="font-weight: bold; color: #000; font-size: 15px;">${pet.name} (${pet.petType})</div>
             <div style="font-size: 13px; color: #6d7175;">${pet.breed || 'Unknown breed'} • ${pet.age ? pet.age + ' yrs' : 'Age unknown'}</div>
           </div>
@@ -256,7 +270,7 @@
         method: "DELETE",
         headers: {
           "x-test-session-id": "paws-portal-session",
-          "x-shop-domain": "celestial-drift-5uuwyo06.myshopify.com"
+          "x-shop-domain": shopDomain
         }
       })
         .then(res => res.json())
@@ -265,9 +279,9 @@
             customerPets = customerPets.filter(p => p.id !== id);
             renderPetsList();
             if (customerPets.length > 0) {
-              trigger.innerText = "🐾 Manage My Pet Profiles";
+              if (trigger) trigger.innerText = "🐾 Manage My Pet Profiles";
             } else {
-              trigger.innerText = "🐾 Create Pet Profile";
+              if (trigger) trigger.innerText = "🐾 Create Pet Profile";
               // Toggle back to empty view inside modal
               listView.style.display = "none";
               formView.style.display = "block";
@@ -293,22 +307,22 @@
       formView.style.display = "block";
     }
 
-    // Load initial pets
-    loadCustomerPets();
+    // --- Core Listener Bindings (Ensures Modal opens even if API is pending/failed) ---
 
     // Open Modal Click Handler
-    if (trigger && (displayMode === "button" || displayMode === "both")) {
+    if (trigger) {
       trigger.addEventListener("click", () => {
+        if (!modal) return;
         modal.style.display = "flex";
         document.body.style.overflow = "hidden"; // Prevent page scrolling
         
         // Show List View if pets exist, otherwise show Form View directly
         if (customerPets.length > 0) {
-          listView.style.display = "block";
-          formView.style.display = "none";
+          if (listView) listView.style.display = "block";
+          if (formView) formView.style.display = "none";
         } else {
-          listView.style.display = "none";
-          formView.style.display = "block";
+          if (listView) listView.style.display = "none";
+          if (formView) formView.style.display = "block";
         }
       });
     }
@@ -316,17 +330,22 @@
     // Auto Pop-up Trigger (runs on load if mode is popup or both)
     if (displayMode === "popup" || displayMode === "both") {
       setTimeout(() => {
+        if (!modal) return;
+        // Retrieve close status from sessionStorage so it doesn't pop up repeatedly
         const hasClosedQuiz = sessionStorage.getItem("paws-quiz-closed") === "true";
-        if (modal.style.display !== "flex" && !hasClosedQuiz) {
+        const isDesignMode = window.Shopify && window.Shopify.designMode;
+
+        // Bypasses the close token block if merchant is actively customizing in Theme Editor (isDesignMode)!
+        if (modal.style.display !== "flex" && (!hasClosedQuiz || isDesignMode)) {
           modal.style.display = "flex";
           document.body.style.overflow = "hidden";
           
           if (customerPets.length > 0) {
-            listView.style.display = "block";
-            formView.style.display = "none";
+            if (listView) listView.style.display = "block";
+            if (formView) formView.style.display = "none";
           } else {
-            listView.style.display = "none";
-            formView.style.display = "block";
+            if (listView) listView.style.display = "none";
+            if (formView) formView.style.display = "block";
           }
         }
       }, popupDelay);
@@ -336,10 +355,10 @@
     if (addNewPetBtn) {
       addNewPetBtn.addEventListener("click", () => {
         editingPetId = null;
-        formTitle.innerText = "Create Pet Profile";
-        form.reset();
-        listView.style.display = "none";
-        formView.style.display = "block";
+        if (formTitle) formTitle.innerText = "Create Pet Profile";
+        if (form) form.reset();
+        if (listView) listView.style.display = "none";
+        if (formView) formView.style.display = "block";
       });
     }
 
@@ -347,23 +366,50 @@
     if (cancelFormBtn) {
       cancelFormBtn.addEventListener("click", () => {
         if (customerPets.length > 0) {
-          formView.style.display = "none";
-          listView.style.display = "block";
+          if (formView) formView.style.display = "none";
+          if (listView) listView.style.display = "block";
         } else {
-          modal.style.display = "none";
+          if (modal) modal.style.display = "none";
           document.body.style.overflow = "auto";
         }
       });
     }
 
-    // Close Modal
+    // Close Modal Button (X)
     if (closeBtn) {
       closeBtn.addEventListener("click", () => {
-        modal.style.display = "none";
+        if (modal) modal.style.display = "none";
         document.body.style.overflow = "auto";
         sessionStorage.setItem("paws-quiz-closed", "true"); // Save close action in session
       });
     }
+
+    // --- Native Shopify Theme Editor Selection Events ---
+    // Instantly pops modal open when merchant clicks on block, and closes it when they click away!
+    document.addEventListener("shopify:block:select", (event) => {
+      if (event.detail.blockId === "{{ block.id }}" && modal) {
+        modal.style.display = "flex";
+        document.body.style.overflow = "hidden";
+        
+        if (customerPets.length > 0) {
+          if (listView) listView.style.display = "block";
+          if (formView) formView.style.display = "none";
+        } else {
+          if (listView) listView.style.display = "none";
+          if (formView) formView.style.display = "block";
+        }
+      }
+    });
+
+    document.addEventListener("shopify:block:deselect", (event) => {
+      if (event.detail.blockId === "{{ block.id }}" && modal) {
+        modal.style.display = "none";
+        document.body.style.overflow = "auto";
+      }
+    });
+
+    // Load initial pets list on boot
+    loadCustomerPets();
 
     // Form Submit Handler
     if (form) {
@@ -397,7 +443,7 @@
           headers: {
             "Content-Type": "application/json",
             "x-test-session-id": "paws-portal-session",
-            "x-shop-domain": "celestial-drift-5uuwyo06.myshopify.com"
+            "x-shop-domain": shopDomain
           },
           body: JSON.stringify(payload)
         })
@@ -414,11 +460,14 @@
             if (data.success) {
               alert("🐾 Pet Profile saved successfully!");
               loadCustomerPets(); // Refresh active pets list
-              formView.style.display = "none";
-              listView.style.display = "block";
+              if (formView) formView.style.display = "none";
+              if (listView) listView.style.display = "block";
             }
           })
-          .catch(() => {});
+          .catch(err => {
+            console.error("❌ Paws & Effect API Connection Error:", err);
+            alert("❌ Connection Error: Failed to save pet profile. Please check your internet connection.");
+          });
       });
     }
   })();
