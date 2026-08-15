@@ -192,6 +192,18 @@ app.post("/api/pets/profile", validateSession, async (req, res) => {
       });
     }
 
+    // Customer-level Pet limit check (Starter: 3 pets, Pro: 10 pets, Enterprise: Unlimited)
+    const customerPetCount = existingProfiles.filter((p: any) => p.customerId === customerId).length;
+    const maxPetsPerCustomer = session.plan === "STARTER" ? 3 : (session.plan === "PRO" ? 10 : Infinity);
+
+    if (customerPetCount >= maxPetsPerCustomer) {
+      return res.status(403).json({
+        error: "CUSTOMER_LIMIT_REACHED",
+        message: `Customer pet profiles limit reached. Under your ${session.plan} plan, each customer can register up to ${maxPetsPerCustomer} pets. Please upgrade to add more pets!`,
+        plan: session.plan
+      });
+    }
+
     // Save profile inside Prisma
     const profile = await prisma.petProfile.create({
       data: {
@@ -281,7 +293,7 @@ app.get("/api/pets/:customerId/recommendations", validateSession, async (req, re
     });
 
     if (profiles.length === 0) {
-      return res.json({ recommendations: [], message: "No pet profiles found for customer." });
+      return res.json({ success: true, profiles: [], recommendations: [], message: "No pet profiles found for customer." });
     }
 
     // Combine all matching recommendations per pet, filtering out pet allergens
@@ -345,7 +357,7 @@ app.get("/api/pets/:customerId/recommendations", validateSession, async (req, re
       });
     }
 
-    res.json({ recommendations: allRecommendations });
+    res.json({ success: true, profiles, recommendations: allRecommendations });
   } catch (err: any) {
     res.status(500).json({ error: "Failed to compile recommendations", details: err.message });
   }

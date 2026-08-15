@@ -3,45 +3,158 @@
   This renders as a customizable, responsive, drag-and-drop block inside the merchant's Theme Editor.
 {% endcomment %}
 
-<div class="paws-effect-storefront-section" style="margin: 30px 0; text-align: center;">
-  <button id="paws-effect-quiz-trigger" style="padding: 14px 28px; background-color: #008060; color: #fff; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: transform 0.2s;">
-    🐾 Personalize My Pet's Subscription
+{% if block.settings.display_mode == 'popup' %}
+  {% assign btn_display_style = "display: none;" %}
+{% else %}
+  {% assign btn_display_style = "display: inline-block;" %}
+{% endif %}
+
+{% case block.settings.button_size %}
+  {% when 'small' %}
+    {% assign btn_padding = "10px 20px" %}
+    {% assign btn_font_size = "14px" %}
+  {% when 'medium' %}
+    {% assign btn_padding = "14px 28px" %}
+    {% assign btn_font_size = "16px" %}
+  {% when 'large' %}
+    {% assign btn_padding = "18px 36px" %}
+    {% assign btn_font_size = "18px" %}
+{% endcase %}
+
+{% case block.settings.button_alignment %}
+  {% when 'left' %}
+    {% assign wrapper_alignment = "text-align: left;" %}
+  {% when 'center' %}
+    {% assign wrapper_alignment = "text-align: center;" %}
+  {% when 'right' %}
+    {% assign wrapper_alignment = "text-align: right;" %}
+{% endcase %}
+
+<!-- The wrapper div dynamically aligns and stretches across the theme section container -->
+<div class="paws-effect-storefront-section" style="margin: 30px 0; {{ wrapper_alignment }} display: block; width: 100%;">
+  <button id="paws-effect-quiz-trigger" style="
+    padding: {{ btn_padding }};
+    font-size: {{ btn_font_size }};
+    background-color: {{ block.settings.button_bg_color }};
+    color: {{ block.settings.button_text_color }};
+    border: none;
+    border-radius: 8px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    transition: transform 0.2s, opacity 0.2s;
+    {{ btn_display_style }}
+  " onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
+    🐾 Manage My Pet Profile
   </button>
 </div>
 
-<!-- Modal Quiz Dialog (Hidden by Default) -->
-<div id="paws-effect-quiz-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 99999; align-items: center; justify-content: center;">
-  <div style="background-color: #fff; padding: 24px; border-radius: 12px; width: 100%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); position: relative; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-    <button id="paws-effect-modal-close" style="position: absolute; top: 16px; right: 16px; background: none; border: none; font-size: 20px; cursor: pointer; color: #6d7175;">✕</button>
+<!-- Full-Page, Semi-Transparent, Perfectly Centered Modal Overlay (Highest possible z-index) -->
+<div id="paws-effect-quiz-modal" style="
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.6);
+  z-index: 2147483647;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px); /* Gorgeous premium blur effect! */
+">
+  <div style="
+    background-color: #fff;
+    padding: 30px;
+    border-radius: 16px;
+    width: 90%;
+    max-width: 500px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+    position: relative;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    animation: pawsSlideIn 0.3s ease-out; /* Premium entry animation! */
+  ">
+    <button id="paws-effect-modal-close" style="
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: none;
+      border: none;
+      font-size: 22px;
+      cursor: pointer;
+      color: #6d7175;
+      font-weight: bold;
+      transition: color 0.2s;
+    " onmouseover="this.style.color='#000'" onmouseout="this.style.color='#6d7175'">✕</button>
     
-    <h2 style="margin-top: 0; margin-bottom: 8px; font-size: 20px; color: #008060;">Paws & Effect Pet Quiz 🐾</h2>
-    <p style="margin: 0 0 20px 0; font-size: 13px; color: #6d7175;">Tell us about your pet, and we'll dynamically customize their subscriptions and filter out any food allergens!</p>
-
-    <form id="paws-effect-quiz-form" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-      <input type="text" id="paws-pet-name" placeholder="Pet Name (e.g. Max)" required style="padding: 8px; border-radius: 4px; border: 1px solid #c9cccf; font-size: 14px;">
-      <select id="paws-pet-type" style="padding: 8px; border-radius: 4px; border: 1px solid #c9cccf; font-size: 14px;">
-        <option value="dog">Dog</option>
-        <option value="cat">Cat</option>
-        <option value="bird">Bird</option>
-        <option value="other">Other</option>
-      </select>
-      <input type="text" id="paws-pet-breed" placeholder="Breed (e.g. Golden Retriever)" style="padding: 8px; border-radius: 4px; border: 1px solid #c9cccf; font-size: 14px;">
-      <input type="text" id="paws-pet-age" placeholder="Age (Years)" style="padding: 8px; border-radius: 4px; border: 1px solid #c9cccf; font-size: 14px;">
-      <input type="text" id="paws-pet-weight" placeholder="Weight (kg)" style="padding: 8px; border-radius: 4px; border: 1px solid #c9cccf; font-size: 14px;">
-      <select id="paws-pet-activity" style="padding: 8px; border-radius: 4px; border: 1px solid #c9cccf; font-size: 14px;">
-        <option value="lazy">Lazy / Inactive</option>
-        <option value="moderate" selected>Moderately Active</option>
-        <option value="active">Highly Active</option>
-      </select>
-      <input type="text" id="paws-pet-allergies" placeholder="Allergies (comma separated, e.g. beef, chicken)" style="padding: 8px; border-radius: 4px; border: 1px solid #c9cccf; font-size: 14px; grid-column: span 2;">
-      <input type="text" id="paws-pet-health" placeholder="Health Issues (comma separated, e.g. joint, sensitive stomach)" style="padding: 8px; border-radius: 4px; border: 1px solid #c9cccf; font-size: 14px; grid-column: span 2;">
+    <!-- view 1: MY PETS PORTAL (LIST VIEW) -->
+    <div id="paws-effect-list-view">
+      <h2 style="margin-top: 0; margin-bottom: 8px; font-size: 22px; color: {{ block.settings.button_bg_color }}; font-weight: bold;">My Registered Pets 🐾</h2>
+      <p style="margin: 0 0 20px 0; font-size: 14px; color: #6d7175; line-height: 1.4;">Manage your registered pets, track weight records, and customize formulation feeds.</p>
       
-      <button type="submit" style="grid-column: span 2; padding: 12px; background-color: #008060; color: #fff; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 15px; margin-top: 8px;">
-        🐾 Generate My Personalized Nutrition Plan
-      </button>
-    </form>
+      <div id="paws-pets-container" style="max-height: 250px; overflow-y: auto; margin-bottom: 24px; border: 1px solid #e1e3e5; border-radius: 8px; padding: 10px;">
+        <!-- Dynamically populated rows go here -->
+      </div>
+
+      <button id="paws-add-new-pet-btn" style="
+        width: 100%;
+        padding: 12px;
+        background-color: {{ block.settings.button_bg_color }};
+        color: {{ block.settings.button_text_color }};
+        border: none;
+        border-radius: 8px;
+        font-weight: bold;
+        cursor: pointer;
+        font-size: 15px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      ">➕ Register Another Pet</button>
+    </div>
+
+    <!-- view 2: CREATE / EDIT PET FORM (FORM VIEW) -->
+    <div id="paws-effect-form-view" style="display: none;">
+      <h2 id="paws-form-title" style="margin-top: 0; margin-bottom: 8px; font-size: 22px; color: {{ block.settings.button_bg_color }}; font-weight: bold;">Create Pet Profile 🐾</h2>
+      <p style="margin: 0 0 20px 0; font-size: 14px; color: #6d7175; line-height: 1.4;">Tell us about your pet, and we'll customize their formulation feeds and filter out allergens!</p>
+
+      <form id="paws-effect-quiz-form" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <input type="text" id="paws-pet-name" placeholder="Pet Name (e.g. Max)" required style="padding: 10px; border-radius: 6px; border: 1px solid #c9cccf; font-size: 14px;">
+        <select id="paws-pet-type" style="padding: 10px; border-radius: 6px; border: 1px solid #c9cccf; font-size: 14px;">
+          <option value="dog">Dog</option>
+          <option value="cat">Cat</option>
+          <option value="bird">Bird</option>
+          <option value="other">Other</option>
+        </select>
+        <input type="text" id="paws-pet-breed" placeholder="Breed (e.g. Golden Retriever)" style="padding: 10px; border-radius: 6px; border: 1px solid #c9cccf; font-size: 14px;">
+        <input type="text" id="paws-pet-age" placeholder="Age (Years)" style="padding: 10px; border-radius: 6px; border: 1px solid #c9cccf; font-size: 14px;">
+        <input type="text" id="paws-pet-weight" placeholder="Weight (kg)" style="padding: 10px; border-radius: 6px; border: 1px solid #c9cccf; font-size: 14px;">
+        <select id="paws-pet-activity" style="padding: 10px; border-radius: 6px; border: 1px solid #c9cccf; font-size: 14px;">
+          <option value="lazy">Lazy / Inactive</option>
+          <option value="moderate" selected>Moderately Active</option>
+          <option value="active">Highly Active</option>
+        </select>
+        <input type="text" id="paws-pet-allergies" placeholder="Allergies (comma separated, e.g. beef, chicken)" style="padding: 10px; border-radius: 6px; border: 1px solid #c9cccf; font-size: 14px; grid-column: span 2;">
+        <input type="text" id="paws-pet-health" placeholder="Health Issues (comma separated, e.g. joint, sensitive stomach)" style="padding: 10px; border-radius: 6px; border: 1px solid #c9cccf; font-size: 14px; grid-column: span 2;">
+        
+        <div style="grid-column: span 2; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px;">
+          <button id="paws-form-cancel-btn" type="button" style="padding: 12px; background-color: #f4f6f8; color: #4a5568; border: 1px solid #c9cccf; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 15px;">Cancel</button>
+          <button type="submit" style="padding: 12px; background-color: {{ block.settings.button_bg_color }}; color: {{ block.settings.button_text_color }}; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">🐾 Save Profile</button>
+        </div>
+      </form>
+    </div>
   </div>
 </div>
+
+<style>
+  @keyframes pawsSlideIn {
+    from {
+      opacity: 0;
+      transform: translateY(20px) scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+</style>
 
 <script>
   (function() {
@@ -49,11 +162,197 @@
     const modal = document.getElementById("paws-effect-quiz-modal");
     const closeBtn = document.getElementById("paws-effect-modal-close");
     const form = document.getElementById("paws-effect-quiz-form");
+    
+    // View Blocks
+    const listView = document.getElementById("paws-effect-list-view");
+    const formView = document.getElementById("paws-effect-form-view");
+    const petsContainer = document.getElementById("paws-pets-container");
+    
+    // Form buttons and titles
+    const formTitle = document.getElementById("paws-form-title");
+    const cancelFormBtn = document.getElementById("paws-form-cancel-btn");
+    const addNewPetBtn = document.getElementById("paws-add-new-pet-btn");
 
-    // Open Modal
-    if (trigger) {
+    // State Variables
+    let customerPets = [];
+    let editingPetId = null;
+
+    // Dynamic schema settings injected natively by Shopify
+    const displayMode = "{{ block.settings.display_mode }}";
+    const popupDelay = {{ block.settings.popup_delay }} * 1000;
+
+    // Mock Customer ID (in production, read from liquid {{ customer.id }})
+    const customerId = "gid://shopify/Customer/123";
+
+    // 1. Fetch registered pets for customer on load
+    function loadCustomerPets() {
+      fetch("https://paws-and-effect-git-develop-willowsoftstudio-5437s-projects.vercel.app/api/pets/gid%3A%2F%2Fshopify%2FCustomer%2F123/recommendations", {
+        headers: {
+          "x-test-session-id": "paws-portal-session",
+          "x-shop-domain": "celestial-drift-5uuwyo06.myshopify.com"
+        }
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            customerPets = data.profiles || [];
+            renderPetsList();
+            
+            // Adjust storefront trigger button text
+            if (customerPets.length > 0) {
+              trigger.innerText = "🐾 Manage My Pet Profiles";
+            } else {
+              trigger.innerText = "🐾 Create Pet Profile";
+            }
+          }
+        })
+        .catch(() => {});
+    }
+
+    // 2. Render Pet profiles List inside Modal
+    function renderPetsList() {
+      if (!petsContainer) return;
+      if (customerPets.length === 0) {
+        petsContainer.innerHTML = `<div style="text-align: center; padding: 20px; color: #6d7175; font-size: 14px;">No pet profiles registered yet.</div>`;
+        return;
+      }
+
+      petsContainer.innerHTML = customerPets.map(pet => `
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #e1e3e5;">
+          <div>
+            <div style="font-weight: bold; color: #000; font-size: 15px;">${pet.name} (${pet.petType})</div>
+            <div style="font-size: 13px; color: #6d7175;">${pet.breed || 'Unknown breed'} • ${pet.age ? pet.age + ' yrs' : 'Age unknown'}</div>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="paws-edit-pet-btn" data-id="${pet.id}" style="padding: 6px 12px; background-color: #f4f6f8; color: #4a5568; border: 1px solid #c9cccf; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold;">Edit</button>
+            <button class="paws-delete-pet-btn" data-id="${pet.id}" style="padding: 6px 12px; background-color: #fee2e2; color: #991b1b; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold;">Delete</button>
+          </div>
+        </div>
+      `).join("");
+
+      // Bind edit events
+      document.querySelectorAll(".paws-edit-pet-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-id");
+          const pet = customerPets.find(p => p.id === id);
+          if (pet) launchEditForm(pet);
+        });
+      });
+
+      // Bind delete events
+      document.querySelectorAll(".paws-delete-pet-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-id");
+          if (confirm("Are you sure you want to delete this pet profile? All medical health logs will be permanently deleted.")) {
+            deletePetProfile(id);
+          }
+        });
+      });
+    }
+
+    // 3. Delete Pet Profile via API
+    function deletePetProfile(id) {
+      fetch("https://paws-and-effect-git-develop-willowsoftstudio-5437s-projects.vercel.app/api/pets/profile/" + id, {
+        method: "DELETE",
+        headers: {
+          "x-test-session-id": "paws-portal-session",
+          "x-shop-domain": "celestial-drift-5uuwyo06.myshopify.com"
+        }
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            customerPets = customerPets.filter(p => p.id !== id);
+            renderPetsList();
+            if (customerPets.length > 0) {
+              trigger.innerText = "🐾 Manage My Pet Profiles";
+            } else {
+              trigger.innerText = "🐾 Create Pet Profile";
+              // Toggle back to empty view inside modal
+              listView.style.display = "none";
+              formView.style.display = "block";
+            }
+          }
+        });
+    }
+
+    // 4. Launch Quiz form in Edit mode
+    function launchEditForm(pet) {
+      editingPetId = pet.id;
+      formTitle.innerText = "✏️ Edit Pet Profile";
+      document.getElementById("paws-pet-name").value = pet.name;
+      document.getElementById("paws-pet-type").value = pet.petType;
+      document.getElementById("paws-pet-breed").value = pet.breed || "";
+      document.getElementById("paws-pet-age").value = pet.age || "";
+      document.getElementById("paws-pet-weight").value = pet.weight || "";
+      document.getElementById("paws-pet-activity").value = pet.activityLevel || "moderate";
+      document.getElementById("paws-pet-allergies").value = (pet.allergies || []).join(", ");
+      document.getElementById("paws-pet-health").value = (pet.healthIssues || []).join(", ");
+      
+      listView.style.display = "none";
+      formView.style.display = "block";
+    }
+
+    // Load initial pets
+    loadCustomerPets();
+
+    // Open Modal Click Handler
+    if (trigger && (displayMode === "button" || displayMode === "both")) {
       trigger.addEventListener("click", () => {
         modal.style.display = "flex";
+        document.body.style.overflow = "hidden"; // Prevent page scrolling
+        
+        // Show List View if pets exist, otherwise show Form View directly
+        if (customerPets.length > 0) {
+          listView.style.display = "block";
+          formView.style.display = "none";
+        } else {
+          listView.style.display = "none";
+          formView.style.display = "block";
+        }
+      });
+    }
+
+    // Auto Pop-up Trigger (runs on load if mode is popup or both)
+    if (displayMode === "popup" || displayMode === "both") {
+      setTimeout(() => {
+        const hasClosedQuiz = sessionStorage.getItem("paws-quiz-closed") === "true";
+        if (modal.style.display !== "flex" && !hasClosedQuiz) {
+          modal.style.display = "flex";
+          document.body.style.overflow = "hidden";
+          
+          if (customerPets.length > 0) {
+            listView.style.display = "block";
+            formView.style.display = "none";
+          } else {
+            listView.style.display = "none";
+            formView.style.display = "block";
+          }
+        }
+      }, popupDelay);
+    }
+
+    // Register Another Pet Button
+    if (addNewPetBtn) {
+      addNewPetBtn.addEventListener("click", () => {
+        editingPetId = null;
+        formTitle.innerText = "Create Pet Profile";
+        form.reset();
+        listView.style.display = "none";
+        formView.style.display = "block";
+      });
+    }
+
+    // Cancel Form Button
+    if (cancelFormBtn) {
+      cancelFormBtn.addEventListener("click", () => {
+        if (customerPets.length > 0) {
+          formView.style.display = "none";
+          listView.style.display = "block";
+        } else {
+          modal.style.display = "none";
+          document.body.style.overflow = "auto";
+        }
       });
     }
 
@@ -61,6 +360,8 @@
     if (closeBtn) {
       closeBtn.addEventListener("click", () => {
         modal.style.display = "none";
+        document.body.style.overflow = "auto";
+        sessionStorage.setItem("paws-quiz-closed", "true"); // Save close action in session
       });
     }
 
@@ -74,7 +375,7 @@
         const rawWeight = document.getElementById("paws-pet-weight").value.replace(/[^0-9.]/g, "").replace(/(\..*?)\..*/g, "$1");
 
         const payload = {
-          customerId: "gid://shopify/Customer/123", // Static fallback or read from native liquid {{ customer.id }} if logged in!
+          customerId,
           name: document.getElementById("paws-pet-name").value,
           petType: document.getElementById("paws-pet-type").value,
           breed: document.getElementById("paws-pet-breed").value,
@@ -85,9 +386,14 @@
           healthIssues: document.getElementById("paws-pet-health").value.split(",").map(s => s.trim()).filter(s => s !== "")
         };
 
-        // Dispatch directly to your Vercel development preview API backend!
-        fetch("https://paws-and-effect-git-develop-willowsoftstudio-5437s-projects.vercel.app/api/pets/profile", {
-          method: "POST",
+        const url = editingPetId 
+          ? "https://paws-and-effect-git-develop-willowsoftstudio-5437s-projects.vercel.app/api/pets/profile/" + editingPetId
+          : "https://paws-and-effect-git-develop-willowsoftstudio-5437s-projects.vercel.app/api/pets/profile";
+        
+        const method = editingPetId ? "PUT" : "POST";
+
+        fetch(url, {
+          method,
           headers: {
             "Content-Type": "application/json",
             "x-test-session-id": "paws-portal-session",
@@ -97,19 +403,22 @@
         })
           .then(res => {
             if (res.status === 403) {
-              return res.json().then(err => { alert("🔒 Plan Limit: " + err.message); });
+              return res.json().then(err => {
+                alert("🔒 Limit: " + err.message);
+                throw new Error(err.message);
+              });
             }
-            return res.json().then(data => {
-              if (data.success) {
-                alert("🐾 Pet Profile for " + payload.name + " created successfully! Your personalized nutrition plan has been generated.");
-                modal.style.display = "none";
-                form.reset();
-              }
-            });
+            return res.json();
           })
-          .catch(err => {
-            alert("❌ Connection Error: Failed to reach Paws & Effect servers. Please try again later.");
-          });
+          .then(data => {
+            if (data.success) {
+              alert("🐾 Pet Profile saved successfully!");
+              loadCustomerPets(); // Refresh active pets list
+              formView.style.display = "none";
+              listView.style.display = "block";
+            }
+          })
+          .catch(() => {});
       });
     }
   })();
@@ -120,6 +429,61 @@
   "name": "Pet Profile Quiz",
   "target": "section",
   "templates": ["index", "product", "cart"],
-  "settings": []
+  "settings": [
+    {
+      "type": "select",
+      "id": "display_mode",
+      "label": "Display Mode",
+      "options": [
+        { "value": "button", "label": "Display Button Only" },
+        { "value": "popup", "label": "Auto Pop-up Only" },
+        { "value": "both", "label": "Display Both (Button + Auto Pop-up)" }
+      ],
+      "default": "button"
+    },
+    {
+      "type": "range",
+      "id": "popup_delay",
+      "label": "Auto Pop-up Delay (Seconds)",
+      "min": 1,
+      "max": 10,
+      "step": 1,
+      "default": 3
+    },
+    {
+      "type": "color",
+      "id": "button_bg_color",
+      "label": "Button / Primary Color",
+      "default": "#008060"
+    },
+    {
+      "type": "color",
+      "id": "button_text_color",
+      "label": "Button Text / Secondary Color",
+      "default": "#ffffff"
+    },
+    {
+      "type": "select",
+      "id": "button_size",
+      "label": "Button Size",
+      "options": [
+        { "value": "small", "label": "Small" },
+        { "value": "medium", "label": "Medium" },
+        { "value": "large", "label": "Large" }
+      ],
+      "default": "medium"
+    },
+    {
+      "type": "select",
+      "id": "button_alignment",
+      "label": "Button Alignment",
+      "options": [
+        { "value": "left", "label": "Align Left" },
+        { "value": "center", "label": "Align Center" },
+        { "value": "right", "label": "Align Right" }
+      ],
+      "default": "center"
+    }
+  ]
 }
 {% endschema %}

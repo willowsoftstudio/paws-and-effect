@@ -3,4 +3,5 @@ api_version = "2026-10"
 [[extensions]]
 name = "Pet Profile Quiz"
 handle = "pet-profile-quiz-block"
+uid = "bb913e32-bfcc-34f2-8af7-0b9c006f7751c3e61c36"
 type = "theme"
