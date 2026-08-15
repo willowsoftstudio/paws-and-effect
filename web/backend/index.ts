@@ -301,6 +301,8 @@ app.post("/api/vets/link", validateSession, async (req, res) => {
 // 8. Serve beautiful, iframe-safe Shopify Polaris embedded App Dashboard
 app.get("/", (req, res) => {
   const shop = req.query.shop as string;
+  const apiKey = process.env.SHOPIFY_API_KEY || "";
+
   if (shop && shop.endsWith(".myshopify.com")) {
     const sanitizedShop = encodeURIComponent(shop);
     res.setHeader(
@@ -321,7 +323,7 @@ app.get("/", (req, res) => {
 <head>
   <meta charset="UTF-8">
   <title>Paws & Effect — Pet Profile Admin</title>
-  <meta name="shopify-api-key" content="${process.env.SHOPIFY_API_KEY}" />
+  <meta name="shopify-api-key" content="${apiKey}" />
   <!-- Load Shopify Polaris CSS for official merchant look & feel -->
   <link rel="stylesheet" href="https://unpkg.com/@shopify/polaris@12.0.0/build/esm/styles.css">
   <style>
@@ -549,23 +551,23 @@ app.get("/", (req, res) => {
             e("div", { style: { backgroundColor: "#fff", padding: "20px", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)", marginBottom: "20px" } }, [
               e("h2", { style: { marginTop: 0, fontSize: "16px" } }, "Create Pet Profile"),
               e("form", { onSubmit: handleCreateProfile, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" } }, [
-                e("input", { placeholder: "Pet Name (e.g. Max)", value: petName, onChange: e => setPetName(e.target.value), required: true, style: { padding: "8px", borderRadius: "4px", border: "1px solid #c9cccf" } }),
-                e("select", { value: petType, onChange: e => setPetType(e.target.value), style: { padding: "8px", borderRadius: "4px", border: "1px solid #c9cccf" } }, [
+                e("input", { placeholder: "Pet Name (e.g. Max)", value: petName, onChange: ev => setPetName(ev.target.value), required: true, style: { padding: "8px", borderRadius: "4px", border: "1px solid #c9cccf" } }),
+                e("select", { value: petType, onChange: ev => setPetType(ev.target.value), style: { padding: "8px", borderRadius: "4px", border: "1px solid #c9cccf" } }, [
                   e("option", { value: "dog" }, "Dog"),
                   e("option", { value: "cat" }, "Cat"),
                   e("option", { value: "bird" }, "Bird"),
                   e("option", { value: "other" }, "Other")
                 ]),
-                e("input", { placeholder: "Breed (e.g. Golden Retriever)", value: breed, onChange: e => setBreed(e.target.value), style: { padding: "8px", borderRadius: "4px", border: "1px solid #c9cccf" } }),
-                e("input", { placeholder: "Age (Years)", type: "number", value: age, onChange: e => setAge(e.target.value), style: { padding: "8px", borderRadius: "4px", border: "1px solid #c9cccf" } }),
-                e("input", { placeholder: "Weight (kg)", type: "number", value: weight, onChange: e => setWeight(e.target.value), style: { padding: "8px", borderRadius: "4px", border: "1px solid #c9cccf" } }),
-                e("select", { value: activityLevel, onChange: e => setActivityLevel(e.target.value), style: { padding: "8px", borderRadius: "4px", border: "1px solid #c9cccf" } }, [
+                e("input", { placeholder: "Breed (e.g. Golden Retriever)", value: breed, onChange: ev => setBreed(ev.target.value), style: { padding: "8px", borderRadius: "4px", border: "1px solid #c9cccf" } }),
+                e("input", { placeholder: "Age (Years)", type: "number", value: age, onChange: ev => setAge(ev.target.value), style: { padding: "8px", borderRadius: "4px", border: "1px solid #c9cccf" } }),
+                e("input", { placeholder: "Weight (kg)", type: "number", value: weight, onChange: ev => setWeight(ev.target.value), style: { padding: "8px", borderRadius: "4px", border: "1px solid #c9cccf" } }),
+                e("select", { value: activityLevel, onChange: ev => setActivityLevel(ev.target.value), style: { padding: "8px", borderRadius: "4px", border: "1px solid #c9cccf" } }, [
                   e("option", { value: "lazy" }, "Lazy / Inactive"),
                   e("option", { value: "moderate" }, "Moderately Active"),
                   e("option", { value: "active" }, "Highly Active")
                 ]),
-                e("input", { placeholder: "Allergies (comma separated, e.g. beef, chicken)", value: allergies, onChange: e => setAllergies(e.target.value), style: { padding: "8px", borderRadius: "4px", border: "1px solid #c9cccf", gridColumn: "span 2" } }),
-                e("input", { placeholder: "Health Issues (comma separated, e.g. joint, sensitive stomach)", value: healthIssues, onChange: e => setHealthIssues(e.target.value), style: { padding: "8px", borderRadius: "4px", border: "1px solid #c9cccf", gridColumn: "span 2" } }),
+                e("input", { placeholder: "Allergies (comma separated, e.g. beef, chicken)", value: allergies, onChange: ev => setAllergies(ev.target.value), style: { padding: "8px", borderRadius: "4px", border: "1px solid #c9cccf", gridColumn: "span 2" } }),
+                e("input", { placeholder: "Health Issues (comma separated, e.g. joint, sensitive stomach)", value: healthIssues, onChange: ev => setHealthIssues(ev.target.value), style: { padding: "8px", borderRadius: "4px", border: "1px solid #c9cccf", gridColumn: "span 2" } }),
                 e("button", { type: "submit", style: { gridColumn: "span 2", padding: "10px", backgroundColor: "#008060", color: "#fff", border: "none", borderRadius: "4px", fontWeight: "bold", cursor: "pointer" } }, "🐾 Save Pet Profile")
               ])
             ]),
