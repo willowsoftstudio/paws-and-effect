@@ -8,6 +8,15 @@ const prisma = new PrismaClient();
 const app = express();
 const port = process.env.PORT || 3001;
 
+// Securely resolve active Shopify Access Token from Environment or database session
+function getShopifyAccessToken(session?: any): string {
+  const envSecret = process.env.SHOPIFY_API_SECRET;
+  if (envSecret && envSecret.startsWith("shpat_")) {
+    return envSecret;
+  }
+  return session ? session.accessToken : "mock_token";
+}
+
 app.use(express.json());
 
 // Secure CORS Middleware for cross-origin storefront requests (allowing shop domains and localhost)
@@ -100,6 +109,7 @@ function decrypt(text: string): string {
 
 // Fetch Actual live products from Shopify Admin GraphQL API using the merchant's accessToken
 async function fetchShopifyProducts(shop: string, accessToken: string) {
+  const activeToken = accessToken === "mock_token" ? getShopifyAccessToken() : accessToken;
   const query = `
     query {
       products(first: 50) {
@@ -121,7 +131,7 @@ async function fetchShopifyProducts(shop: string, accessToken: string) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Shopify-Access-Token": accessToken
+        "X-Shopify-Access-Token": activeToken
       },
       body: JSON.stringify({ query })
     });
@@ -388,7 +398,7 @@ app.get("/api/pets/:customerId/recommendations", validateSession, async (req, re
             description: "Grain-free kibble for cats with digestive sensitivities."
           }
         ] 
-      : await fetchShopifyProducts(session.shop, session.accessToken);
+      : await fetchShopifyProducts(session.shop, getShopifyAccessToken(session));
 
     if (profiles.length === 0) {
       // High-Converting CRO Fallback: Return actual live catalog if no pets are registered yet!
@@ -828,7 +838,7 @@ app.get("/api/pets/presigned-view-url/:petProfileId", validateSession, async (re
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Shopify-Access-Token": session.accessToken
+        "X-Shopify-Access-Token": getShopifyAccessToken(session)
       },
       body: JSON.stringify({ query })
     });
@@ -901,7 +911,7 @@ app.get("/api/pets/presigned-view-url/:petProfileId", validateSession, async (re
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Shopify-Access-Token": session.accessToken
+        "X-Shopify-Access-Token": getShopifyAccessToken(session)
       },
       body: JSON.stringify({ query: getStatusQuery })
     });
@@ -943,7 +953,7 @@ app.get("/api/pets/presigned-view-url/:petProfileId", validateSession, async (re
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Shopify-Access-Token": session.accessToken
+          "X-Shopify-Access-Token": getShopifyAccessToken(session)
         },
         body: JSON.stringify({
           query: updateMutation,
@@ -984,7 +994,7 @@ app.get("/api/pets/presigned-view-url/:petProfileId", validateSession, async (re
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Shopify-Access-Token": session.accessToken
+          "X-Shopify-Access-Token": getShopifyAccessToken(session)
         },
         body: JSON.stringify({
           query: createMutation,
@@ -1746,7 +1756,7 @@ app.post("/api/webhooks/orders-create", express.json(), async (req, res) => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Shopify-Access-Token": session.accessToken
+        "X-Shopify-Access-Token": getShopifyAccessToken(session)
       },
       body: JSON.stringify({ query, variables })
     });
@@ -1796,7 +1806,7 @@ app.get("/api/customers", validateSession, async (req, res) => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Shopify-Access-Token": session.accessToken
+        "X-Shopify-Access-Token": getShopifyAccessToken(session)
       },
       body: JSON.stringify({ query })
     });
