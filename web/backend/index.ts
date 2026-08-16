@@ -3,18 +3,18 @@ import { PrismaClient } from "@prisma/client";
 import crypto from "crypto";
 import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import shopify from "./shopify.js";
 
 const prisma = new PrismaClient();
 const app = express();
 const port = process.env.PORT || 3001;
 
-// Securely resolve active Shopify Access Token from Environment or database session
+// Securely resolve active Shopify Access Token dynamically from active multi-tenant session!
 function getShopifyAccessToken(session?: any): string {
-  const envSecret = process.env.SHOPIFY_API_SECRET;
-  if (envSecret && envSecret.startsWith("shpat_")) {
-    return envSecret;
+  if (session && session.accessToken) {
+    return session.accessToken;
   }
-  return session ? session.accessToken : "mock_token";
+  return "mock_token";
 }
 
 app.use(express.json());
@@ -46,6 +46,7 @@ if (!isTestMode) {
     "DATABASE_URL",
     "SHOPIFY_API_KEY",
     "SHOPIFY_API_SECRET",
+    "SHOPIFY_ADMIN_API_TOKEN",
     "AWS_ACCESS_KEY_ID",
     "AWS_SECRET_ACCESS_KEY",
     "S3_BUCKET_NAME",
@@ -168,49 +169,46 @@ async function fetchShopifyProducts(shop: string, accessToken: string) {
   }
 }
 
-// Session Validation Middleware
+// Shopify App OAuth Installation Handlers
+app.get(shopify.config.auth.path, shopify.redirectToAuth());
+app.get(
+  shopify.config.auth.callbackPath,
+  shopify.actions.repository.callback(),
+  shopify.redirectToShopifyOrAppRoot()
+);
+
+// Session Validation Middleware (Multi-Tenant & Offline Mock Aware)
 async function validateSession(req: express.Request, res: express.Response, next: express.NextFunction) {
-  const sessionId = req.headers["x-test-session-id"] as string;
-  const shop = req.headers["x-shop-domain"] as string || "test-shop.myshopify.com";
-
-  if (!sessionId) {
-    return res.status(401).json({ error: "Missing session authorization header" });
-  }
-
-  try {
-    let session = await prisma.session.findUnique({ where: { id: sessionId } });
-    if (!session) {
-      session = await prisma.session.create({
-        data: {
-          id: sessionId,
-          shop,
-          state: "active_mock",
-          accessToken: "mock_token",
-          plan: "STARTER"
-        }
-      });
-    }
-
-    // Smart Session Resolver: If we are in a live environment, but the client accessed via mock token,
-    // dynamically swap it with the real, live, authorized session for this store!
-    if (session.accessToken === "mock_token" && !isTestMode) {
-      const realSession = await prisma.session.findFirst({
-        where: { 
-          shop,
-          NOT: { accessToken: "mock_token" }
-        }
-      });
-      if (realSession) {
-        session = realSession;
+  if (isTestMode) {
+    // In local E2E test runs, bypass and mock the session
+    const sessionId = req.headers["x-test-session-id"] as string || "paws-portal-session";
+    const shop = req.headers["x-shop-domain"] as string || "paws-e2e-shop.myshopify.com";
+    try {
+      let session = await prisma.session.findUnique({ where: { id: sessionId } });
+      if (!session) {
+        session = await prisma.session.create({
+          data: {
+            id: sessionId,
+            shop,
+            state: "active_mock",
+            accessToken: "mock_token",
+            plan: "STARTER"
+          }
+        });
       }
+      req.body.session = session;
+      return next();
+    } catch (err: any) {
+      return res.status(500).json({ error: "Test session storage error", details: err.message });
     }
-
-    // Bind session to the request
-    req.body.session = session;
-    next();
-  } catch (err: any) {
-    res.status(500).json({ error: "Session storage error", details: err.message });
   }
+
+  // In live production/embedded mode, validate dynamically using official Shopify middleware
+  return shopify.validateAuthenticatedSession()(req, res, () => {
+    // Bind the resolved Shopify session to req.body.session for backwards compatibility with our endpoints!
+    req.body.session = res.locals.shopify.session;
+    next();
+  });
 }
 
 // 1. Health Check
