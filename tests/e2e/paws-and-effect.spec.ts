@@ -269,6 +269,13 @@ test.describe("Paws & Effect E2E Tests — Billing, Feature Gating, and Recommen
     const s3ViewBody = await s3ViewSuccessRes.json();
     expect(s3ViewBody.success).toBe(true);
     expect(s3ViewBody.viewUrl).toContain("amazonaws.com"); // Contains the real secure AWS signed URL!
+
+    // J2. Verify S3 Secure Redirect Proxy generates view signature and redirects successfully
+    const redirectRes = await request.get(`/api/vets/view-prescription?key=${s3UploadBody.objectKey}`, {
+      maxRedirects: 0
+    });
+    expect(redirectRes.status()).toBe(302);
+    expect(redirectRes.headers().location).toContain("amazonaws.com");
   });
 
   test("4. Should be able to query checkout-rule status and toggle it on/off dynamically", async ({ request }) => {
@@ -301,5 +308,38 @@ test.describe("Paws & Effect E2E Tests — Billing, Feature Gating, and Recommen
     });
     expect(toggleOnRes.status()).toBe(200);
     expect((await toggleOnRes.json()).enabled).toBe(true);
+  });
+
+  test("5. Webhook - Should automatically process orders/create and tag orders requiring prescription review", async ({ request }) => {
+    const headers = {
+      "x-test-session-id": testSessionId,
+      "x-shopify-shop-domain": shopDomain
+    };
+
+    // A. Mock a webhook payload of an order containing a prescription product (has _Prescription S3 Key property!)
+    const orderPayload = {
+      id: 99887766,
+      admin_graphql_api_id: "gid://shopify/Order/99887766",
+      line_items: [
+        {
+          id: 11111,
+          title: "Prescription Kibble Product",
+          properties: [
+            { name: "_Pet Name", value: "Max" },
+            { name: "_Prescription S3 Key", value: "prescriptions/paws-e2e-shop/123/e2e_prescription.pdf" }
+          ]
+        }
+      ]
+    };
+
+    const webhookRes = await request.post("/api/webhooks/orders-create", {
+      headers,
+      data: orderPayload
+    });
+
+    expect(webhookRes.status()).toBe(200);
+    const webhookBody = await webhookRes.json();
+    expect(webhookBody.success).toBe(true);
+    expect(webhookBody.tagged).toBe(true);
   });
 });

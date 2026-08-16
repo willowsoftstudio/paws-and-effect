@@ -11,6 +11,10 @@ automatically_update_urls_on_dev = true
 [webhooks]
 api_version = "2026-10"
 
+[[webhooks.subscriptions]]
+topics = [ "orders/create" ]
+uri = "/api/webhooks/orders-create"
+
 [access_scopes]
 scopes = "write_products,read_products,write_customers,read_customers,write_draft_orders,write_validations,read_validations"
 

@@ -128,6 +128,9 @@
     let customerId = isCustomerLoggedIn ? "gid://shopify/Customer/{{ customer.id }}" : "guest_visitor";
     const activeProductTitle = "{{ product.title | escape }}";
 
+    // Dynamically load Backend API URL from block settings (defaults to remote develop staging)
+    const backendApiUrl = "{{ block.settings.api_url | default: 'https://paws-and-effect-git-develop-willowsoftstudio-5437s-projects.vercel.app' }}";
+
     // Ensure app embed modal overlays are relocated directly to document.body
     if (modal && modal.parentNode !== document.body) {
       document.body.appendChild(modal);
@@ -145,12 +148,13 @@
         }
 
         // Upload securely via our API Proxy (No S3 CORS or exposing S3 directly!)
-        fetch("https://paws-and-effect-git-develop-willowsoftstudio-5437s-projects.vercel.app/api/pets/upload-prescription?filename=" + encodeURIComponent(file.name), {
+        fetch(backendApiUrl + "/api/pets/upload-prescription?filename=" + encodeURIComponent(file.name), {
           method: "POST",
           headers: {
             "Content-Type": file.type,
             "x-test-session-id": "paws-portal-session",
-            "x-shop-domain": shopDomain
+            "x-shop-domain": shopDomain,
+            "x-customer-id": customerId // Pass customer ID securely!
           },
           body: file // Send raw binary buffer
         })
@@ -207,13 +211,7 @@
       // Calculate individual validity for each eligible pet
       const validPets = eligiblePets.filter(p => checkPrescriptionValidity(p).valid);
 
-      // Case 1: They have exactly 1 eligible pet and it's valid. We auto-select it silently!
-      if (validPets.length === 1) {
-        onSelectPetCallback(validPets[0]);
-        return true;
-      }
-
-      // Case 2: No valid prescriptions on file (either 0 registered pets, or all are expired/missing)
+      // Case 1: No valid prescriptions on file (either 0 registered pets, or all are expired/missing)
       if (validPets.length === 0) {
         alert("⚕️ Prescription Verification Required: To purchase \"" + productTitle + "\", please register your pet and upload their active veterinary prescription document!");
         
@@ -240,7 +238,7 @@
         return false;
       }
 
-      // Case 3: Multiple pets with valid prescriptions, or some expired ones on file!
+      // Case 2: Multiple pets with valid prescriptions, or some expired ones on file!
       if (modal) {
         modal.style.display = "flex";
         document.body.style.overflow = "hidden";
@@ -351,10 +349,20 @@
 
     function injectPropertiesToForm(targetForm, pet) {
       if (!targetForm) return;
+      const oldId = targetForm.querySelector('input[name="properties[_Pet ID]"]');
+      if (oldId) oldId.remove();
       const oldName = targetForm.querySelector('input[name="properties[_Pet Name]"]');
       if (oldName) oldName.remove();
       const oldKey = targetForm.querySelector('input[name="properties[_Prescription S3 Key]"]');
       if (oldKey) oldKey.remove();
+      const oldLabel = targetForm.querySelector('input[name="properties[Prescription]"]');
+      if (oldLabel) oldLabel.remove();
+
+      const petIdInput = document.createElement("input");
+      petIdInput.type = "hidden";
+      petIdInput.name = "properties[_Pet ID]";
+      petIdInput.value = pet.id;
+      targetForm.appendChild(petIdInput);
 
       const petNameInput = document.createElement("input");
       petNameInput.type = "hidden";
@@ -367,6 +375,14 @@
       s3KeyInput.name = "properties[_Prescription S3 Key]";
       s3KeyInput.value = pet.prescriptionUrl;
       targetForm.appendChild(s3KeyInput);
+
+      const prescriptionLabel = document.createElement("input");
+      prescriptionLabel.type = "hidden";
+      prescriptionLabel.name = "properties[Prescription]";
+      // Build evergreen backend redirect proxy URL
+      const viewRedirectUrl = backendApiUrl + "/api/vets/view-prescription?key=" + encodeURIComponent(pet.prescriptionUrl);
+      prescriptionLabel.value = "✓ Uploaded (Pet: " + pet.name + ") | View: " + viewRedirectUrl;
+      targetForm.appendChild(prescriptionLabel);
     }
 
     // --- Dynamic Interception Layer 1: Document Forms (Submit Actions) ---
@@ -424,19 +440,28 @@
                     if (bodyObj.items && Array.isArray(bodyObj.items)) {
                       bodyObj.items.forEach(item => {
                         if (!item.properties) item.properties = {};
+                        item.properties["_Pet ID"] = selectedPet.id;
                         item.properties["_Pet Name"] = selectedPet.name;
                         item.properties["_Prescription S3 Key"] = selectedPet.prescriptionUrl;
+                        const viewRedirectUrl = backendApiUrl + "/api/vets/view-prescription?key=" + encodeURIComponent(selectedPet.prescriptionUrl);
+                        item.properties["Prescription"] = "✓ Uploaded (Pet: " + selectedPet.name + ") | View: " + viewRedirectUrl;
                       });
                       options.body = JSON.stringify(bodyObj);
                     } else {
                       if (!bodyObj.properties) bodyObj.properties = {};
+                      bodyObj.properties["_Pet ID"] = selectedPet.id;
                       bodyObj.properties["_Pet Name"] = selectedPet.name;
                       bodyObj.properties["_Prescription S3 Key"] = selectedPet.prescriptionUrl;
+                      const viewRedirectUrl = backendApiUrl + "/api/vets/view-prescription?key=" + encodeURIComponent(selectedPet.prescriptionUrl);
+                      bodyObj.properties["Prescription"] = "✓ Uploaded (Pet: " + selectedPet.name + ") | View: " + viewRedirectUrl;
                       options.body = JSON.stringify(bodyObj);
                     }
                   } else if (options.body instanceof FormData) {
+                    options.body.set("properties[_Pet ID]", selectedPet.id);
                     options.body.set("properties[_Pet Name]", selectedPet.name);
                     options.body.set("properties[_Prescription S3 Key]", selectedPet.prescriptionUrl);
+                    const viewRedirectUrl = backendApiUrl + "/api/vets/view-prescription?key=" + encodeURIComponent(selectedPet.prescriptionUrl);
+                    options.body.set("properties[Prescription]", "✓ Uploaded (Pet: " + selectedPet.name + ") | View: " + viewRedirectUrl);
                   }
                 } catch (e) {}
               }
@@ -482,8 +507,11 @@
               try {
                 if (body.includes("properties")) {
                   const params = new URLSearchParams(body);
+                  params.set("properties[_Pet ID]", selectedPet.id);
                   params.set("properties[_Pet Name]", selectedPet.name);
                   params.set("properties[_Prescription S3 Key]", selectedPet.prescriptionUrl);
+                  const viewRedirectUrl = backendApiUrl + "/api/vets/view-prescription?key=" + encodeURIComponent(selectedPet.prescriptionUrl);
+                  params.set("properties[Prescription]", "✓ Uploaded (Pet: " + selectedPet.name + ") | View: " + viewRedirectUrl);
                   arguments[0] = params.toString();
                 }
               } catch (e) {}
@@ -535,7 +563,7 @@
     function loadCustomerPets() {
       if (!isCustomerLoggedIn) return;
 
-      fetch("https://paws-and-effect-git-develop-willowsoftstudio-5437s-projects.vercel.app/api/pets/" + encodeURIComponent(customerId) + "/recommendations", {
+      fetch(backendApiUrl + "/api/pets/" + encodeURIComponent(customerId) + "/recommendations", {
         headers: {
           "x-test-session-id": "paws-portal-session",
           "x-shop-domain": shopDomain
@@ -593,7 +621,7 @@
     }
 
     function deletePetProfile(id) {
-      fetch("https://paws-and-effect-git-develop-willowsoftstudio-5437s-projects.vercel.app/api/pets/profile/" + id, {
+      fetch(backendApiUrl + "/api/pets/profile/" + id, {
         method: "DELETE",
         headers: {
           "x-test-session-id": "paws-portal-session",
@@ -733,8 +761,8 @@
         };
 
         const url = editingPetId 
-          ? "https://paws-and-effect-git-develop-willowsoftstudio-5437s-projects.vercel.app/api/pets/profile/" + editingPetId
-          : "https://paws-and-effect-git-develop-willowsoftstudio-5437s-projects.vercel.app/api/pets/profile";
+          ? backendApiUrl + "/api/pets/profile/" + editingPetId
+          : backendApiUrl + "/api/pets/profile";
         
         const method = editingPetId ? "PUT" : "POST";
 
@@ -791,19 +819,28 @@
                         if (bodyObj.items && Array.isArray(bodyObj.items)) {
                           bodyObj.items.forEach(item => {
                             if (!item.properties) item.properties = {};
+                            item.properties["_Pet ID"] = newPet.id;
                             item.properties["_Pet Name"] = newPet.name;
                             item.properties["_Prescription S3 Key"] = newPet.prescriptionUrl;
+                            const viewRedirectUrl = backendApiUrl + "/api/vets/view-prescription?key=" + encodeURIComponent(newPet.prescriptionUrl);
+                            item.properties["Prescription"] = "✓ Uploaded (Pet: " + newPet.name + ") | View: " + viewRedirectUrl;
                           });
                           options.body = JSON.stringify(bodyObj);
                         } else {
                           if (!bodyObj.properties) bodyObj.properties = {};
+                          bodyObj.properties["_Pet ID"] = newPet.id;
                           bodyObj.properties["_Pet Name"] = newPet.name;
                           bodyObj.properties["_Prescription S3 Key"] = newPet.prescriptionUrl;
+                          const viewRedirectUrl = backendApiUrl + "/api/vets/view-prescription?key=" + encodeURIComponent(newPet.prescriptionUrl);
+                          bodyObj.properties["Prescription"] = "✓ Uploaded (Pet: " + newPet.name + ") | View: " + viewRedirectUrl;
                           options.body = JSON.stringify(bodyObj);
                         }
                       } else if (options.body instanceof FormData) {
+                        options.body.set("properties[_Pet ID]", newPet.id);
                         options.body.set("properties[_Pet Name]", newPet.name);
                         options.body.set("properties[_Prescription S3 Key]", newPet.prescriptionUrl);
+                        const viewRedirectUrl = backendApiUrl + "/api/vets/view-prescription?key=" + encodeURIComponent(newPet.prescriptionUrl);
+                        options.body.set("properties[Prescription]", "✓ Uploaded (Pet: " + newPet.name + ") | View: " + viewRedirectUrl);
                       }
                     } catch (e) {}
                   }
@@ -839,6 +876,12 @@
       "id": "primary_color",
       "label": "Primary / Theme Color",
       "default": "#008060"
+    },
+    {
+      "type": "text",
+      "id": "api_url",
+      "label": "Backend API URL",
+      "default": "https://paws-and-effect-git-develop-willowsoftstudio-5437s-projects.vercel.app"
     }
   ]
 }

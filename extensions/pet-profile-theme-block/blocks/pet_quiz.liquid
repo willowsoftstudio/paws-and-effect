@@ -261,210 +261,48 @@
       }
     }
 
-    // A. Real-Time direct-to-S3 File Upload Handler
+    // A. Real-Time API-Proxied File Upload Handler
     if (fileInput) {
       fileInput.addEventListener("change", (ev) => {
         const file = ev.target.files[0];
         if (!file) return;
 
         if (uploadProgress) {
-          uploadProgress.innerText = "⏳ Requesting secure S3 credentials...";
+          uploadProgress.innerText = "⏳ Securely uploading " + file.name + " to medical vault...";
           uploadProgress.style.display = "block";
         }
 
-        // 1. Get AWS S3 PUT Presigned URL from Express backend
-        fetch("https://paws-and-effect-git-develop-willowsoftstudio-5437s-projects.vercel.app/api/vets/presigned-upload-url", {
+        // Upload securely via our API Proxy (No S3 CORS or exposing S3 directly!)
+        fetch("https://paws-and-effect-git-develop-willowsoftstudio-5437s-projects.vercel.app/api/pets/upload-prescription?filename=" + encodeURIComponent(file.name), {
           method: "POST",
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type": file.type,
             "x-test-session-id": "paws-portal-session",
-            "x-shop-domain": shopDomain
+            "x-shop-domain": shopDomain,
+            "x-customer-id": customerId // Pass customer ID securely!
           },
-          body: JSON.stringify({
-            filename: file.name,
-            contentType: file.type
-          })
+          body: file // Send raw binary buffer
         })
-          .then(res => res.json())
+          .then(res => {
+            if (!res.ok) {
+              return res.json().then(err => { throw new Error(err.error || "Upload failed"); });
+            }
+            return res.json();
+          })
           .then(data => {
             if (data.success) {
-              if (uploadProgress) uploadProgress.innerText = "⏳ Securely uploading " + file.name + " directly to AWS S3...";
-
-              // 2. Upload file directly to S3 via secure PUT Signed URL
-              return fetch(data.uploadUrl, {
-                method: "PUT",
-                body: file,
-                headers: {
-                  "Content-Type": file.type
-                }
-              }).then(s3Res => {
-                if (s3Res.ok) {
-                  uploadedPrescriptionKey = data.objectKey; // Store S3 key!
-                  if (uploadProgress) uploadProgress.innerHTML = "✅ Prescription successfully uploaded to secure S3 vault!";
-                } else {
-                  throw new Error("S3 Upload failed");
-                }
-              });
+              uploadedPrescriptionKey = data.objectKey; // Store S3 key!
+              if (uploadProgress) uploadProgress.innerHTML = "✅ Prescription successfully uploaded to secure medical vault!";
             } else {
               throw new Error(data.error);
             }
           })
           .catch(err => {
-            console.error("❌ AWS S3 Upload Error:", err);
-            if (uploadProgress) uploadProgress.innerHTML = "<span style='color: #991b1b;'>❌ S3 Upload Failed: " + err.message + "</span>";
+            console.error("❌ Prescription Upload Error:", err);
+            if (uploadProgress) uploadProgress.innerHTML = "<span style='color: #991b1b;'>❌ Upload Failed: " + err.message + "</span>";
           });
       });
     }
-
-    // B. Triple-Layered Interception Suite for "Add to Cart" (Form Submit, fetch, and XMLHttpRequests)
-    
-    // Helper to check if gating is active and block actions if prescription is missing
-    function verifyGatingAndPrompt() {
-      if (!isPrescriptionRequired) return true; // Normal product: allow
-      
-      const petWithPrescription = customerPets.find(p => p.prescriptionUrl && p.prescriptionUrl.trim() !== "");
-      if (petWithPrescription) {
-        return true; // Has prescription: allow
-      }
-
-      // Block and open portal modal!
-      alert("⚕️ Prescription Verification Required: To purchase this item, please register a pet and upload their veterinary prescription document!");
-      
-      if (modal) {
-        modal.style.display = "flex";
-        document.body.style.overflow = "hidden";
-      }
-      
-      if (!isCustomerLoggedIn) {
-        listView.style.display = "none";
-        formView.style.display = "none";
-        guestView.style.display = "block";
-      } else {
-        guestView.style.display = "none";
-        if (customerPets.length > 0) {
-          if (listView) listView.style.display = "block";
-          if (formView) formView.style.display = "none";
-        } else {
-          if (listView) listView.style.display = "none";
-          if (formView) formView.style.display = "block";
-        }
-      }
-      return false; // Block!
-    }
-
-    // Helper to dynamically inject properties into forms
-    function injectPropertiesToForm(targetForm, pet) {
-      if (!targetForm) return;
-      // Remove any existing properties first to avoid duplicates
-      const oldName = targetForm.querySelector('input[name="properties[_Pet Name]"]');
-      if (oldName) oldName.remove();
-      const oldKey = targetForm.querySelector('input[name="properties[_Prescription S3 Key]"]');
-      if (oldKey) oldKey.remove();
-
-      const petNameInput = document.createElement("input");
-      petNameInput.type = "hidden";
-      petNameInput.name = "properties[_Pet Name]";
-      petNameInput.value = pet.name;
-      targetForm.appendChild(petNameInput);
-
-      const s3KeyInput = document.createElement("input");
-      s3KeyInput.type = "hidden";
-      s3KeyInput.name = "properties[_Prescription S3 Key]";
-      s3KeyInput.value = pet.prescriptionUrl;
-      targetForm.appendChild(s3KeyInput);
-
-      console.log("⚕️ Paws & Effect: Injected S3 Prescription key to Line Item properties:", pet.prescriptionUrl);
-    }
-
-    // Layer 1: Document-level Form Submit Interception (Catch any form submitted to /cart/add)
-    document.addEventListener("submit", (ev) => {
-      const targetForm = ev.target;
-      if (targetForm && targetForm.action && (targetForm.action.includes("/cart/add") || targetForm.action.includes("/cart/add.js"))) {
-        if (!verifyGatingAndPrompt()) {
-          ev.preventDefault();
-          ev.stopPropagation();
-        } else {
-          const petWithPrescription = customerPets.find(p => p.prescriptionUrl && p.prescriptionUrl.trim() !== "");
-          if (petWithPrescription) {
-            injectPropertiesToForm(targetForm, petWithPrescription);
-          }
-        }
-      }
-    }, true);
-
-    // Layer 2: Global window.fetch Interception (Catch modern theme AJAX Add to Cart)
-    const originalFetch = window.fetch;
-    window.fetch = function(...args) {
-      const rawUrl = args[0];
-      const url = typeof rawUrl === "string" ? rawUrl : (rawUrl instanceof Request ? rawUrl.url : "");
-      
-      if (url && (url.includes("/cart/add") || url.includes("/cart/add.js"))) {
-        if (!verifyGatingAndPrompt()) {
-          return Promise.reject(new Error("⚕️ Prescription Verification Required"));
-        } else {
-          // If valid prescription exists, inject properties into request body if it is JSON
-          const petWithPrescription = customerPets.find(p => p.prescriptionUrl && p.prescriptionUrl.trim() !== "");
-          const options = args[1];
-          if (petWithPrescription && options && options.body) {
-            try {
-              if (typeof options.body === "string") {
-                const bodyObj = JSON.parse(options.body);
-                if (bodyObj.items && Array.isArray(bodyObj.items)) {
-                  bodyObj.items.forEach(item => {
-                    if (!item.properties) item.properties = {};
-                    item.properties["_Pet Name"] = petWithPrescription.name;
-                    item.properties["_Prescription S3 Key"] = petWithPrescription.prescriptionUrl;
-                  });
-                  options.body = JSON.stringify(bodyObj);
-                } else {
-                  if (!bodyObj.properties) bodyObj.properties = {};
-                  bodyObj.properties["_Pet Name"] = petWithPrescription.name;
-                  bodyObj.properties["_Prescription S3 Key"] = petWithPrescription.prescriptionUrl;
-                  options.body = JSON.stringify(bodyObj);
-                }
-              } else if (options.body instanceof FormData) {
-                options.body.set("properties[_Pet Name]", petWithPrescription.name);
-                options.body.set("properties[_Prescription S3 Key]", petWithPrescription.prescriptionUrl);
-              }
-            } catch (e) {
-              console.warn("⚠️ [Paws UI] Failed to inject properties to fetch payload:", e.message);
-            }
-          }
-        }
-      }
-      return originalFetch.apply(this, args);
-    };
-
-    // Layer 3: Global XMLHttpRequest Interception (Catch jQuery and Legacy AJAX Add to Cart)
-    const originalOpen = XMLHttpRequest.prototype.open;
-    XMLHttpRequest.prototype.open = function(method, url) {
-      this._cartAddUrl = url;
-      return originalOpen.apply(this, arguments);
-    };
-
-    const originalSend = XMLHttpRequest.prototype.send;
-    XMLHttpRequest.prototype.send = function(body) {
-      if (this._cartAddUrl && (this._cartAddUrl.includes("/cart/add") || this._cartAddUrl.includes("/cart/add.js"))) {
-        if (!verifyGatingAndPrompt()) {
-          // Do not send, cancel request
-          return;
-        } else {
-          const petWithPrescription = customerPets.find(p => p.prescriptionUrl && p.prescriptionUrl.trim() !== "");
-          if (petWithPrescription && typeof body === "string") {
-            try {
-              if (body.includes("properties")) {
-                // Parse and inject properties into urlencoded form body
-                const params = new URLSearchParams(body);
-                params.set("properties[_Pet Name]", petWithPrescription.name);
-                params.set("properties[_Prescription S3 Key]", petWithPrescription.prescriptionUrl);
-                arguments[0] = params.toString();
-              }
-            } catch (e) {}
-          }
-        }
-      }
-      return originalSend.apply(this, arguments);
-    };
 
     // 1. Fetch registered pets for customer on load
     function loadCustomerPets() {

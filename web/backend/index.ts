@@ -748,7 +748,31 @@ app.get("/api/pets/presigned-view-url/:petProfileId", validateSession, async (re
     } catch (err: any) {
       res.status(500).json({ error: "S3 proxy upload failed", details: err.message });
     }
-  });
+    });
+
+    // 7f-3. AWS S3: Secure Redirect Proxy for Clickable Order Links (Starter/Pro/Enterprise)
+    app.get("/api/vets/view-prescription", async (req, res) => {
+    const key = req.query.key as string;
+
+    if (!key) {
+      return res.status(400).send("❌ Error: Missing prescription key parameter.");
+    }
+
+    try {
+      // Generate secure GET signed URL valid for 15 minutes (900 seconds)
+      const command = new GetObjectCommand({
+        Bucket: S3_BUCKET_NAME,
+        Key: key
+      });
+
+      const viewUrl = await getSignedUrl(s3, command, { expiresIn: 900 });
+
+      // Redirect the merchant's browser directly to the secure private S3 URL!
+      res.redirect(viewUrl);
+    } catch (err: any) {
+      res.status(500).send("❌ Error: Failed to generate secure document signature. " + err.message);
+    }
+    });
 
     // 7h. Fetch Cart Validation Rule Status (Starter/Pro/Enterprise)
     app.get("/api/checkout-rule/status", validateSession, async (req, res) => {
@@ -1052,6 +1076,8 @@ app.get("/", (req, res) => {
 
     function App() {
       const [plan, setPlan] = React.useState("STARTER");
+      const [targetCustomerId, setTargetCustomerId] = React.useState("gid://shopify/Customer/123");
+      const [customers, setCustomers] = React.useState([]);
       const [petName, setPetName] = React.useState("");
       const [petType, setPetType] = React.useState("dog");
       const [breed, setBreed] = React.useState("");
@@ -1147,21 +1173,40 @@ app.get("/", (req, res) => {
           .catch(() => {});
       }, []);
 
-      // Sync active plan and recommendations on load
+      // Fetch Shopify Customers list for Admin Dropdown Selector
       React.useEffect(() => {
-        // Create initial session & fetch recommendation lists
-        fetch("/api/pets/gid%3A%2F%2Fshopify%2FCustomer%2F123/recommendations", { headers })
+        fetch("/api/customers", { headers })
+          .then(res => res.json())
+          .then(data => {
+            if (data.success && data.customers) {
+              setCustomers(data.customers);
+              if (data.customers.length > 0) {
+                setTargetCustomerId(data.customers[0].id); // Auto-select first customer!
+              }
+            }
+          })
+          .catch(err => {
+            console.warn("[Paws UI Warning] Failed to fetch Shopify Customers:", err.message);
+          });
+      }, []);
+
+      // Sync active plan and recommendations on load or customer selector change
+      React.useEffect(() => {
+        if (!targetCustomerId) return;
+        // Dynamically fetch based on selected Shopify Customer!
+        fetch("/api/pets/" + encodeURIComponent(targetCustomerId) + "/recommendations", { headers })
           .then(res => {
             if (!res.ok) throw new Error("HTTP error " + res.status);
             return res.json();
           })
           .then(data => {
             if (data.recommendations) setRecs(data.recommendations);
+            if (data.profiles) setProfiles(data.profiles);
           })
           .catch(err => {
             console.warn("[Paws UI Warning] Failed to load recommendations:", err.message);
           });
-      }, [plan]);
+      }, [plan, targetCustomerId]);
 
       // Fetch vet credentials if enterprise is active
       React.useEffect(() => {
@@ -1266,7 +1311,7 @@ app.get("/", (req, res) => {
           method,
           headers,
           body: JSON.stringify({
-            customerId: "gid://shopify/Customer/123",
+            customerId: targetCustomerId,
             name: petName,
             petType,
             breed,
@@ -1305,8 +1350,11 @@ app.get("/", (req, res) => {
               setAllergiesList([]);
               setHealthIssuesInput("");
               setHealthIssuesList([]);
+              if (customers.length > 0) {
+                setTargetCustomerId(customers[0].id);
+              }
               // Re-fetch recommendations
-              fetch("/api/pets/gid%3A%2F%2Fshopify%2FCustomer%2F123/recommendations", { headers })
+              fetch("/api/pets/" + encodeURIComponent(targetCustomerId) + "/recommendations", { headers })
                 .then(res => res.json())
                 .then(d => { if (d.recommendations) setRecs(d.recommendations); });
             }
@@ -1316,6 +1364,7 @@ app.get("/", (req, res) => {
 
       const handleEditPet = (pet) => {
         setEditingPetId(pet.id);
+        setTargetCustomerId(pet.customerId || "gid://shopify/Customer/123");
         setPetName(pet.name);
         setPetType(pet.petType);
         setBreed(pet.breed || "");
@@ -1415,6 +1464,18 @@ app.get("/", (req, res) => {
             e("div", { style: { backgroundColor: "#fff", padding: "20px", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)", marginBottom: "20px" } }, [
               e("h2", { style: { marginTop: 0, fontSize: "16px" } }, editingPetId ? "✏️ Edit Pet Profile" : "Create Pet Profile"),
               e("form", { onSubmit: handleCreateProfile, style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" } }, [
+                // Human-readable Shopify Customer Dropdown Selector (fully hides GID!)
+                e("select", { 
+                  value: targetCustomerId, 
+                  onChange: ev => setTargetCustomerId(ev.target.value), 
+                  required: true, 
+                  style: { padding: "8px", borderRadius: "4px", border: "1px solid #c9cccf", gridColumn: "span 2", fontSize: "14px" } 
+                }, [
+                  e("option", { value: "" }, "Select Shopify Customer..."),
+                  ...customers.map(c => 
+                    e("option", { key: c.id, value: c.id }, c.displayName + " (" + (c.email || "No email") + ")")
+                  )
+                ]),
                 e("input", { placeholder: "Pet Name (e.g. Max)", value: petName, onChange: ev => setPetName(ev.target.value), required: true, style: { padding: "8px", borderRadius: "4px", border: "1px solid #c9cccf" } }),
                 e("select", { value: petType, onChange: ev => setPetType(ev.target.value), style: { padding: "8px", borderRadius: "4px", border: "1px solid #c9cccf" } }, [
                   e("option", { value: "dog" }, "Dog"),
@@ -1610,6 +1671,127 @@ app.get("/", (req, res) => {
 </body>
 </html>
   `);
+});
+
+// 9. Shopify Webhooks: Automatically tag orders containing prescription products for review
+app.post("/api/webhooks/orders-create", express.json(), async (req, res) => {
+  const order = req.body;
+  const shop = req.headers["x-shopify-shop-domain"] as string;
+
+  if (!order || !order.line_items) {
+    return res.status(400).json({ error: "Invalid webhook payload" });
+  }
+
+  // A. Scan line items for hidden S3 prescription keys
+  let requiresReview = false;
+  order.line_items.forEach((item: any) => {
+    if (item.properties && Array.isArray(item.properties)) {
+      item.properties.forEach((prop: any) => {
+        if (prop.name === "_Prescription S3 Key" && prop.value && prop.value.trim() !== "") {
+          requiresReview = true;
+        }
+      });
+    }
+  });
+
+  if (!requiresReview) {
+    return res.json({ success: true, message: "No prescription items found. Skipping." });
+  }
+
+  console.log(`[Webhook] Prescription order detected! Order ID: ${order.id} for shop: ${shop}`);
+
+  try {
+    // B. Resolve access token from Prisma session table
+    const session = await prisma.session.findFirst({
+      where: { shop: shop || "paws-e2e-shop.myshopify.com" }
+    });
+
+    if (!session) {
+      throw new Error(`No active session found for shop: ${shop}`);
+    }
+
+    // C. Tag the order with "Prescription Review Required" via Shopify GraphQL API
+    const orderGid = order.admin_graphql_api_id || `gid://shopify/Order/${order.id}`;
+
+    const query = `
+      mutation tagsAdd($id: ID!, $tags: [String!]!) {
+        tagsAdd(id: $id, tags: $tags) {
+          node { id }
+          userErrors { field message }
+        }
+      }
+    `;
+
+    const variables = {
+      id: orderGid,
+      tags: ["Prescription Review Required"]
+    };
+
+    const response = await fetch(`https://${session.shop}/admin/api/2026-10/graphql.json`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": session.accessToken
+      },
+      body: JSON.stringify({ query, variables })
+    });
+
+    const body = await response.json();
+    const userErrors = body.data?.tagsAdd?.userErrors || [];
+    if (userErrors.length > 0) {
+      throw new Error(`Shopify tagsAdd error: ${userErrors[0].message}`);
+    }
+
+    console.log(`✅ [Webhook] Order ${orderGid} successfully tagged as "Prescription Review Required"!`);
+    res.json({ success: true, tagged: true });
+  } catch (err: any) {
+    console.error("❌ [Webhook Error] Failed to process orders/create webhook:", err.message);
+    res.status(500).json({ error: "Webhook processing failed", details: err.message });
+  }
+});
+
+// 10. Fetch Customer List (DisplayName and Email) for Admin Dropdowns (Starter/Pro/Enterprise)
+app.get("/api/customers", validateSession, async (req, res) => {
+  const session = req.body.session;
+
+  if (isTestMode) {
+    return res.json({
+      success: true,
+      customers: [
+        { id: "gid://shopify/Customer/123", displayName: "James Hollenbeck", email: "jhollenbeck@gmail.com" },
+        { id: "gid://shopify/Customer/456", displayName: "Willow Dog-Owner", email: "willow@gmail.com" }
+      ]
+    });
+  }
+
+  const query = `
+    query {
+      customers(first: 50) {
+        nodes {
+          id
+          displayName
+          email
+        }
+      }
+    }
+  `;
+
+  try {
+    const response = await fetch(`https://${session.shop}/admin/api/2026-10/graphql.json`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": session.accessToken
+      },
+      body: JSON.stringify({ query })
+    });
+
+    const resBody = await response.json();
+    const customers = resBody.data?.customers?.nodes || [];
+    res.json({ success: true, customers });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to fetch customers", details: err.message });
+  }
 });
 
 app.listen(port, () => {
