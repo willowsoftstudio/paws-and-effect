@@ -705,6 +705,44 @@ app.get("/api/pets/presigned-view-url/:petProfileId", validateSession, async (re
     }
     });
 
+    // 7f-2. AWS S3: API-Proxied Secure Upload (Starter/Pro/Enterprise)
+    app.post("/api/pets/upload-prescription", express.raw({ type: "*/*", limit: "10mb" }), validateSession, async (req, res) => {
+    const session = req.body.session;
+    const filename = req.query.filename as string || "prescription.pdf";
+    const contentType = req.headers["content-type"] as string || "application/pdf";
+    const fileBuffer = req.body as Buffer;
+
+    if (!fileBuffer || fileBuffer.length === 0) {
+    return res.status(400).json({ error: "Empty file body provided." });
+    }
+
+    if (!contentType.startsWith("image/") && contentType !== "application/pdf") {
+    return res.status(400).json({ error: "Invalid file type. Only PDF and Image formats are allowed." });
+    }
+
+    if (fileBuffer.length > 5 * 1024 * 1024) {
+    return res.status(400).json({ error: "File size exceeds the 5MB limit." });
+    }
+
+    const cleanFilename = filename.replace(/[^a-zA-Z0-9.-]/g, "_");
+    const objectKey = `prescriptions/${session.id}/${Date.now()}_${cleanFilename}`;
+
+    try {
+    const command = new PutObjectCommand({
+      Bucket: S3_BUCKET_NAME,
+      Key: objectKey,
+      Body: fileBuffer,
+      ContentType: contentType
+    });
+
+    await s3.send(command);
+
+    res.json({ success: true, objectKey });
+    } catch (err: any) {
+    res.status(500).json({ error: "S3 proxy upload failed", details: err.message });
+    }
+    });
+
     // 7h. Fetch Cart Validation Rule Status (Starter/Pro/Enterprise)
     app.get("/api/checkout-rule/status", validateSession, async (req, res) => {
     const session = req.body.session;

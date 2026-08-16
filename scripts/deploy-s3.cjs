@@ -42,11 +42,34 @@ if (env.AWS_ACCESS_KEY_ID) {
 const isProd = process.argv.includes("--prod") || process.argv.includes("--production");
 const stackName = isProd ? "paws-effect-storage-production" : "paws-effect-storage-preview";
 
-// Smart Bucket Selector: Parse process.argv for --bucket parameter
-let bucketName = isProd ? "paws-effect-prescriptions-production-vault" : "paws-effect-prescriptions-preview-vault";
+// Resolve environment-specific TOML config name and extract application_url for S3 CORS Origins
+const configName = isProd ? "shopify.app.toml" : "shopify.app.dev.toml";
+let appUrl = "";
+const tomlPath = path.join(appDir, configName);
+
+if (fs.existsSync(tomlPath)) {
+  const tomlContent = fs.readFileSync(tomlPath, "utf8");
+  const match = tomlContent.match(/application_url\s*=\s*["']([^"']*)["']/);
+  if (match) {
+    appUrl = match[1].trim();
+  }
+}
+
+if (!appUrl) {
+  console.error(`❌ Error: Could not resolve application_url from your configuration: ${configName}`);
+  process.exit(1);
+}
+
+// Smart Bucket Selector: Enforce env-configured S3_BUCKET_NAME with NO fallbacks!
+let bucketName = env.S3_BUCKET_NAME;
 const bucketArgIdx = process.argv.indexOf("--bucket");
 if (bucketArgIdx !== -1 && process.argv[bucketArgIdx + 1]) {
   bucketName = process.argv[bucketArgIdx + 1].trim();
+}
+
+if (!bucketName) {
+  console.error("❌ Error: S3_BUCKET_NAME is not configured in your .env file or passed on the command line!");
+  process.exit(1);
 }
 
 // Check if AWS keys are present in .env
@@ -61,7 +84,8 @@ const runCommand = `aws cloudformation deploy \
   --template-file "${templatePath}" \
   --stack-name "${stackName}" \
   --parameter-overrides \
-    BucketName="${bucketName}"`;
+    BucketName="${bucketName}" \
+    ApplicationUrl="${appUrl}"`;
 
 try {
   console.log(`[AWS Deploy] Spawning AWS CloudFormation deployment for ${isProd ? "Production" : "Preview"} using .env credentials...`);

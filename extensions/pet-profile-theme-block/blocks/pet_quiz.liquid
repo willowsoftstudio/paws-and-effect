@@ -15,7 +15,8 @@
 {% endif %}
 
 {% assign is_prescription_required = false %}
-{% if product.tags contains 'prescription-required' or product.metafields.paws_effect.prescription_required.value == true %}
+{% assign lower_tags = product.tags | join: ',' | downcase %}
+{% if lower_tags contains 'prescription-required' or lower_tags contains 'prescription required' or lower_tags contains 'prescription_required' or product.metafields.paws_effect.prescription_required.value == true %}
   {% assign is_prescription_required = true %}
 {% endif %}
 
@@ -315,56 +316,155 @@
       });
     }
 
-    // B. Intercept Shopify "Add to Cart" form for prescription-required gating!
-    const addToCartForm = document.querySelector('form[action="/cart/add"]');
-    if (addToCartForm && isPrescriptionRequired) {
-      addToCartForm.addEventListener("submit", (ev) => {
-        // Find if they have at least one pet with a prescription Url
-        const petWithPrescription = customerPets.find(p => p.prescriptionUrl && p.prescriptionUrl.trim() !== "");
+    // B. Triple-Layered Interception Suite for "Add to Cart" (Form Submit, fetch, and XMLHttpRequests)
+    
+    // Helper to check if gating is active and block actions if prescription is missing
+    function verifyGatingAndPrompt() {
+      if (!isPrescriptionRequired) return true; // Normal product: allow
+      
+      const petWithPrescription = customerPets.find(p => p.prescriptionUrl && p.prescriptionUrl.trim() !== "");
+      if (petWithPrescription) {
+        return true; // Has prescription: allow
+      }
 
-        if (!petWithPrescription) {
-          ev.preventDefault(); // Block add-to-cart!
-          alert("⚕️ Prescription Verification Required: To purchase this item, please register a pet and upload their veterinary prescription document!");
-          
-          // Open our gorgeous centered overlay modal so they can upload their S3 document on-the-spot!
-          if (modal) {
-            modal.style.display = "flex";
-            document.body.style.overflow = "hidden";
+      // Block and open portal modal!
+      alert("⚕️ Prescription Verification Required: To purchase this item, please register a pet and upload their veterinary prescription document!");
+      
+      if (modal) {
+        modal.style.display = "flex";
+        document.body.style.overflow = "hidden";
+      }
+      
+      if (!isCustomerLoggedIn) {
+        listView.style.display = "none";
+        formView.style.display = "none";
+        guestView.style.display = "block";
+      } else {
+        guestView.style.display = "none";
+        if (customerPets.length > 0) {
+          if (listView) listView.style.display = "block";
+          if (formView) formView.style.display = "none";
+        } else {
+          if (listView) listView.style.display = "none";
+          if (formView) formView.style.display = "block";
+        }
+      }
+      return false; // Block!
+    }
+
+    // Helper to dynamically inject properties into forms
+    function injectPropertiesToForm(targetForm, pet) {
+      if (!targetForm) return;
+      // Remove any existing properties first to avoid duplicates
+      const oldName = targetForm.querySelector('input[name="properties[_Pet Name]"]');
+      if (oldName) oldName.remove();
+      const oldKey = targetForm.querySelector('input[name="properties[_Prescription S3 Key]"]');
+      if (oldKey) oldKey.remove();
+
+      const petNameInput = document.createElement("input");
+      petNameInput.type = "hidden";
+      petNameInput.name = "properties[_Pet Name]";
+      petNameInput.value = pet.name;
+      targetForm.appendChild(petNameInput);
+
+      const s3KeyInput = document.createElement("input");
+      s3KeyInput.type = "hidden";
+      s3KeyInput.name = "properties[_Prescription S3 Key]";
+      s3KeyInput.value = pet.prescriptionUrl;
+      targetForm.appendChild(s3KeyInput);
+
+      console.log("⚕️ Paws & Effect: Injected S3 Prescription key to Line Item properties:", pet.prescriptionUrl);
+    }
+
+    // Layer 1: Document-level Form Submit Interception (Catch any form submitted to /cart/add)
+    document.addEventListener("submit", (ev) => {
+      const targetForm = ev.target;
+      if (targetForm && targetForm.action && (targetForm.action.includes("/cart/add") || targetForm.action.includes("/cart/add.js"))) {
+        if (!verifyGatingAndPrompt()) {
+          ev.preventDefault();
+          ev.stopPropagation();
+        } else {
+          const petWithPrescription = customerPets.find(p => p.prescriptionUrl && p.prescriptionUrl.trim() !== "");
+          if (petWithPrescription) {
+            injectPropertiesToForm(targetForm, petWithPrescription);
           }
-          if (!isCustomerLoggedIn) {
-            listView.style.display = "none";
-            formView.style.display = "none";
-            guestView.style.display = "block";
-          } else {
-            guestView.style.display = "none";
-            if (customerPets.length > 0) {
-              if (listView) listView.style.display = "block";
-              if (formView) formView.style.display = "none";
-            } else {
-              if (listView) listView.style.display = "none";
-              if (formView) formView.style.display = "block";
+        }
+      }
+    }, true);
+
+    // Layer 2: Global window.fetch Interception (Catch modern theme AJAX Add to Cart)
+    const originalFetch = window.fetch;
+    window.fetch = function(...args) {
+      const rawUrl = args[0];
+      const url = typeof rawUrl === "string" ? rawUrl : (rawUrl instanceof Request ? rawUrl.url : "");
+      
+      if (url && (url.includes("/cart/add") || url.includes("/cart/add.js"))) {
+        if (!verifyGatingAndPrompt()) {
+          return Promise.reject(new Error("⚕️ Prescription Verification Required"));
+        } else {
+          // If valid prescription exists, inject properties into request body if it is JSON
+          const petWithPrescription = customerPets.find(p => p.prescriptionUrl && p.prescriptionUrl.trim() !== "");
+          const options = args[1];
+          if (petWithPrescription && options && options.body) {
+            try {
+              if (typeof options.body === "string") {
+                const bodyObj = JSON.parse(options.body);
+                if (bodyObj.items && Array.isArray(bodyObj.items)) {
+                  bodyObj.items.forEach(item => {
+                    if (!item.properties) item.properties = {};
+                    item.properties["_Pet Name"] = petWithPrescription.name;
+                    item.properties["_Prescription S3 Key"] = petWithPrescription.prescriptionUrl;
+                  });
+                  options.body = JSON.stringify(bodyObj);
+                } else {
+                  if (!bodyObj.properties) bodyObj.properties = {};
+                  bodyObj.properties["_Pet Name"] = petWithPrescription.name;
+                  bodyObj.properties["_Prescription S3 Key"] = petWithPrescription.prescriptionUrl;
+                  options.body = JSON.stringify(bodyObj);
+                }
+              } else if (options.body instanceof FormData) {
+                options.body.set("properties[_Pet Name]", petWithPrescription.name);
+                options.body.set("properties[_Prescription S3 Key]", petWithPrescription.prescriptionUrl);
+              }
+            } catch (e) {
+              console.warn("⚠️ [Paws UI] Failed to inject properties to fetch payload:", e.message);
             }
           }
-        } else {
-          // They have a valid S3 prescription on file!
-          // Dynamically inject the hidden Cart Line Item Properties before letting the form submit!
-          // This ties their S3 prescription keys permanently to their placed Shopify Order!
-          const petNameInput = document.createElement("input");
-          petNameInput.type = "hidden";
-          petNameInput.name = "properties[_Pet Name]";
-          petNameInput.value = petWithPrescription.name;
-          addToCartForm.appendChild(petNameInput);
-
-          const s3KeyInput = document.createElement("input");
-          s3KeyInput.type = "hidden";
-          s3KeyInput.name = "properties[_Prescription S3 Key]";
-          s3KeyInput.value = petWithPrescription.prescriptionUrl;
-          addToCartForm.appendChild(s3KeyInput);
-          
-          console.log("⚕️ Paws & Effect: Injected S3 Prescription key to Line Item properties:", petWithPrescription.prescriptionUrl);
         }
-      });
-    }
+      }
+      return originalFetch.apply(this, args);
+    };
+
+    // Layer 3: Global XMLHttpRequest Interception (Catch jQuery and Legacy AJAX Add to Cart)
+    const originalOpen = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function(method, url) {
+      this._cartAddUrl = url;
+      return originalOpen.apply(this, arguments);
+    };
+
+    const originalSend = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.send = function(body) {
+      if (this._cartAddUrl && (this._cartAddUrl.includes("/cart/add") || this._cartAddUrl.includes("/cart/add.js"))) {
+        if (!verifyGatingAndPrompt()) {
+          // Do not send, cancel request
+          return;
+        } else {
+          const petWithPrescription = customerPets.find(p => p.prescriptionUrl && p.prescriptionUrl.trim() !== "");
+          if (petWithPrescription && typeof body === "string") {
+            try {
+              if (body.includes("properties")) {
+                // Parse and inject properties into urlencoded form body
+                const params = new URLSearchParams(body);
+                params.set("properties[_Pet Name]", petWithPrescription.name);
+                params.set("properties[_Prescription S3 Key]", petWithPrescription.prescriptionUrl);
+                arguments[0] = params.toString();
+              }
+            } catch (e) {}
+          }
+        }
+      }
+      return originalSend.apply(this, arguments);
+    };
 
     // 1. Fetch registered pets for customer on load
     function loadCustomerPets() {
@@ -536,13 +636,17 @@
 
     // --- Core Listener Bindings (Ensures Modal opens even if API is pending/failed) ---
 
-    // Open Modal Click Handler (Only triggers in Modal mode!)
-    if (trigger && embedLayout !== "inline") {
-      trigger.addEventListener("click", () => {
+    // Global Click Delegator: Open Modal from the main button or ANY custom link/button with class "paws-quiz-trigger" or href="#paws-quiz"
+    document.addEventListener("click", (ev) => {
+      const targetElement = ev.target.closest("#paws-effect-quiz-trigger, .paws-quiz-trigger, a[href='#paws-quiz'], a[href='#paws-quiz-trigger']");
+      if (targetElement && embedLayout !== "inline") {
+        ev.preventDefault();
+        ev.stopPropagation();
+
         if (!modal) return;
         modal.style.display = "flex";
         document.body.style.overflow = "hidden"; // Prevent page scrolling
-        
+
         if (!isCustomerLoggedIn) {
           listView.style.display = "none";
           formView.style.display = "none";
@@ -557,8 +661,8 @@
             if (formView) formView.style.display = "block";
           }
         }
-      });
-    }
+      }
+    });
 
     // Auto Pop-up Trigger (runs on load if mode is popup or both, and NOT inline)
     if (embedLayout !== "inline" && (displayMode === "popup" || displayMode === "both")) {

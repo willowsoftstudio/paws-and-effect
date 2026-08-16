@@ -225,6 +225,19 @@ test.describe("Paws & Effect E2E Tests — Billing, Feature Gating, and Recommen
     expect(s3UploadBody.uploadUrl).toContain("amazonaws.com"); // Contains the real secure AWS signed URL!
     expect(s3UploadBody.objectKey).toContain("prescriptions/");
 
+    // H2. Verify API-Proxied Secure Upload endpoint accepts and uploads raw files to S3
+    const proxyUploadRes = await request.post("/api/pets/upload-prescription?filename=e2e_prescription.pdf", {
+      headers: {
+        ...headers,
+        "Content-Type": "application/pdf"
+      },
+      data: Buffer.from("MOCK_PDF_FILE_BINARY_CONTENT") // Send raw mock file content!
+    });
+    expect(proxyUploadRes.status()).toBe(200);
+    const proxyUploadBody = await proxyUploadRes.json();
+    expect(proxyUploadBody.success).toBe(true);
+    expect(proxyUploadBody.objectKey).toContain("prescriptions/");
+
     // Retrieve Max's pet profile ID to test view URL
     const profiles = await prisma.petProfile.findMany({ where: { shop: shopDomain, name: "Max" } });
     expect(profiles.length).toBe(1);

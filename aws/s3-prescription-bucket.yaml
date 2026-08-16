@@ -4,7 +4,10 @@ Description: 'Provision a secure, private Amazon S3 Bucket with dynamic bucket n
 Parameters:
   BucketName:
     Type: String
-    Description: 'Unique name for your S3 bucket (e.g., paws-effect-prescriptions-preview).'
+    Description: 'Unique name for your S3 bucket.'
+  ApplicationUrl:
+    Type: String
+    Description: 'The application URL from your active shopify.app.toml.'
 
 Resources:
   PrescriptionS3Bucket:
@@ -26,7 +29,7 @@ Resources:
               - POST
               - HEAD
             AllowedOrigins:
-              - 'https://paws-and-effect-git-develop-willowsoftstudio-5437s-projects.vercel.app'
+              - !Ref ApplicationUrl
               - 'http://localhost:3001'
             ExposedHeaders:
               - ETag
