@@ -1,0 +1,22 @@
+query CartValidationsGenerateRunInput {
+  cart {
+    lines {
+      quantity
+      attribute(key: "_Prescription S3 Key") {
+        value
+      }
+      merchandise {
+        __typename
+        ... on ProductVariant {
+          id
+          title
+          product {
+            id
+            title
+            hasAnyTag(tags: ["prescription-required"])
+          }
+        }
+      }
+    }
+  }
+}

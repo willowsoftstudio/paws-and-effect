@@ -98,37 +98,65 @@ function decrypt(text: string): string {
   }
 }
 
-// Mock Product Catalog for smart recommendations and allergen filtering
-const MOCK_PRODUCTS = [
-  {
-    id: "prod-joint-chews",
-    title: "Joint Care Support Chews",
-    tags: ["senior", "large-breed", "joint-support"],
-    allergens: ["beef"],
-    description: "Glucosamine mobility chews for large, active, or senior dogs."
-  },
-  {
-    id: "prod-hypo-fish",
-    title: "Hypoallergenic Salmon Kibble",
-    tags: ["toy-breed", "sensitive-stomach", "itchy-skin", "hypoallergenic"],
-    allergens: [],
-    description: "Limited ingredient kibble perfect for sensitive stomachs and itchy skin."
-  },
-  {
-    id: "prod-chicken-formula",
-    title: "Active Breed Chicken Kibble",
-    tags: ["active", "retriever", "high-protein"],
-    allergens: ["chicken"],
-    description: "High-energy formula packed with chicken proteins."
-  },
-  {
-    id: "prod-grainfree-cat",
-    title: "Grain-Free Salmon Cat Food",
-    tags: ["cat", "sensitive-stomach", "grain-free"],
-    allergens: ["grain"],
-    description: "Grain-free kibble for cats with digestive sensitivities."
+// Fetch Actual live products from Shopify Admin GraphQL API using the merchant's accessToken
+async function fetchShopifyProducts(shop: string, accessToken: string) {
+  const query = `
+    query {
+      products(first: 50) {
+        nodes {
+          id
+          title
+          tags
+          description
+          metafield(namespace: "paws_effect", key: "allergens") {
+            value
+          }
+        }
+      }
+    }
+  `;
+
+  try {
+    const response = await fetch(`https://${shop}/admin/api/2026-10/graphql.json`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": accessToken
+      },
+      body: JSON.stringify({ query })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Shopify API responded with: ${response.statusText}`);
+    }
+
+    const resBody = await response.json();
+    const rawProducts = resBody.data?.products?.nodes || [];
+
+    // Map Shopify's live product nodes to our expected catalog schema on-the-fly!
+    return rawProducts.map((p: any) => {
+      let allergens: string[] = [];
+      if (p.metafield && p.metafield.value) {
+        try {
+          allergens = JSON.parse(p.metafield.value);
+        } catch (e) {
+          allergens = p.metafield.value.split(",").map((s: string) => s.trim().toLowerCase());
+        }
+      }
+
+      return {
+        id: p.id,
+        title: p.title,
+        tags: p.tags || [],
+        allergens: allergens,
+        description: p.description || ""
+      };
+    });
+  } catch (err: any) {
+    console.error("⚠️ Failed to retrieve live Shopify products catalog:", err.message);
+    return []; // Return empty array on failure (no mocks in production!)
   }
-];
+}
 
 // Session Validation Middleware
 async function validateSession(req: express.Request, res: express.Response, next: express.NextFunction) {
@@ -187,7 +215,7 @@ app.patch("/api/billing", validateSession, async (req, res) => {
 
 // 3. Pet Profiles: Create or Update Profile
 app.post("/api/pets/profile", validateSession, async (req, res) => {
-  const { customerId, name, petType, breed, age, weight, activityLevel, allergies, healthIssues } = req.body;
+  const { customerId, name, petType, breed, age, weight, activityLevel, allergies, healthIssues, prescriptionUrl } = req.body;
   const session = req.body.session;
 
   if (!customerId || !name || !petType) {
@@ -235,7 +263,8 @@ app.post("/api/pets/profile", validateSession, async (req, res) => {
         weight: weight ? parseFloat(weight) : null,
         activityLevel,
         allergies: allergies || [],
-        healthIssues: healthIssues || []
+        healthIssues: healthIssues || [],
+        prescriptionUrl: prescriptionUrl || null
       }
     });
 
@@ -248,7 +277,7 @@ app.post("/api/pets/profile", validateSession, async (req, res) => {
 // 3b. Pet Profiles: Update Existing Profile
 app.put("/api/pets/profile/:id", validateSession, async (req, res) => {
   const { id } = req.params;
-  const { name, petType, breed, age, weight, activityLevel, allergies, healthIssues } = req.body;
+  const { name, petType, breed, age, weight, activityLevel, allergies, healthIssues, prescriptionUrl } = req.body;
   const session = req.body.session;
 
   if (!name || !petType) {
@@ -266,7 +295,8 @@ app.put("/api/pets/profile/:id", validateSession, async (req, res) => {
         weight: weight ? parseFloat(weight) : null,
         activityLevel,
         allergies: allergies || [],
-        healthIssues: healthIssues || []
+        healthIssues: healthIssues || [],
+        prescriptionUrl: prescriptionUrl !== undefined ? prescriptionUrl : undefined
       }
     });
 
@@ -311,8 +341,55 @@ app.get("/api/pets/:customerId/recommendations", validateSession, async (req, re
       where: { customerId, shop: session.shop }
     });
 
+    // Fetch actual live product catalog from Shopify Admin GraphQL API (with safe mock fallback for offline tests)
+    const activeProducts = isTestMode 
+      ? [
+          {
+            id: "prod-joint-chews",
+            title: "Joint Care Support Chews",
+            tags: ["senior", "large-breed", "joint-support"],
+            allergens: ["beef"],
+            description: "Glucosamine mobility chews for large, active, or senior dogs."
+          },
+          {
+            id: "prod-hypo-fish",
+            title: "Hypoallergenic Salmon Kibble",
+            tags: ["toy-breed", "sensitive-stomach", "itchy-skin", "hypoallergenic"],
+            allergens: [],
+            description: "Limited ingredient kibble perfect for sensitive stomachs and itchy skin."
+          },
+          {
+            id: "prod-chicken-formula",
+            title: "Active Breed Chicken Kibble",
+            tags: ["active", "retriever", "high-protein"],
+            allergens: ["chicken"],
+            description: "High-energy formula packed with chicken proteins."
+          },
+          {
+            id: "prod-grainfree-cat",
+            title: "Grain-Free Salmon Cat Food",
+            tags: ["cat", "sensitive-stomach", "grain-free"],
+            allergens: ["grain"],
+            description: "Grain-free kibble for cats with digestive sensitivities."
+          }
+        ] 
+      : await fetchShopifyProducts(session.shop, session.accessToken);
+
     if (profiles.length === 0) {
-      return res.json({ success: true, profiles: [], recommendations: [], message: "No pet profiles found for customer." });
+      // High-Converting CRO Fallback: Return actual live catalog if no pets are registered yet!
+      const defaultRecommendations = activeProducts.map((product: any) => ({
+        ...product,
+        isAllergic: false,
+        score: 0,
+        matchingReasons: ["Top Selling Formula! Take our Pet Quiz to unlock personalized formulation feeds."]
+      }));
+
+      return res.json({ 
+        success: true, 
+        profiles: [], 
+        recommendations: defaultRecommendations, 
+        message: "No pet profiles found. Displaying default premium catalog fallback." 
+      });
     }
 
     // Combine all matching recommendations per pet, filtering out pet allergens
@@ -325,9 +402,9 @@ app.get("/api/pets/:customerId/recommendations", validateSession, async (req, re
       const petAge = pet.age || 0;
 
       // Filter products
-      const recommendedForPet = MOCK_PRODUCTS.map(product => {
+      const recommendedForPet = activeProducts.map((product: any) => {
         const prodAllergens = product.allergens.map((a: string) => a.toLowerCase());
-        const isAllergic = prodAllergens.some(allergen => petAllergies.includes(allergen));
+        const isAllergic = prodAllergens.some((allergen: string) => petAllergies.includes(allergen));
 
         // Scoring rules matching characteristics
         let score = 0;
@@ -366,8 +443,8 @@ app.get("/api/pets/:customerId/recommendations", validateSession, async (req, re
 
       // Filter out raw allergen items, sort by score descending
       const safeRecommendations = recommendedForPet
-        .filter(p => !p.isAllergic && p.score > 0)
-        .sort((a, b) => b.score - a.score);
+        .filter((p: any) => !p.isAllergic && p.score > 0)
+        .sort((a: any, b: any) => b.score - a.score);
 
       allRecommendations.push({
         petName: pet.name,
@@ -623,12 +700,235 @@ app.get("/api/pets/presigned-view-url/:petProfileId", validateSession, async (re
     const viewUrl = await getSignedUrl(s3, command, { expiresIn: 900 });
 
     res.json({ success: true, viewUrl });
-  } catch (err: any) {
+    } catch (err: any) {
     res.status(500).json({ error: "Failed to generate S3 view signature", details: err.message });
-  }
-});
+    }
+    });
 
-// 8. Serve beautiful, iframe-safe Shopify Polaris embedded App Dashboard
+    // 7h. Fetch Cart Validation Rule Status (Starter/Pro/Enterprise)
+    app.get("/api/checkout-rule/status", validateSession, async (req, res) => {
+    const session = req.body.session;
+
+    if (isTestMode) {
+      return res.json({
+        success: true,
+        functionDeployed: true,
+        enabled: true,
+        validationId: "gid://shopify/Validation/mock-id-123"
+      });
+    }
+
+    const query = `
+    query GetFunctionAndValidations {
+      shopifyFunctions(first: 50) {
+        nodes {
+          id
+          handle
+        }
+      }
+      validations(first: 50) {
+        nodes {
+          id
+          title
+          enabled
+          shopifyFunction {
+            id
+          }
+        }
+      }
+    }
+    `;
+
+    try {
+    const response = await fetch(`https://${session.shop}/admin/api/2026-10/graphql.json`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": session.accessToken
+      },
+      body: JSON.stringify({ query })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Shopify API responded with: ${response.statusText}`);
+    }
+
+    const resBody = await response.json();
+    const functions = resBody.data?.shopifyFunctions?.nodes || [];
+    const validations = resBody.data?.validations?.nodes || [];
+
+    // Find our function node
+    const functionNode = functions.find((f: any) => f.handle === "prescription-validator");
+    if (!functionNode) {
+      return res.json({ success: true, enabled: false, functionDeployed: false, message: "Checkout validation function is not deployed yet." });
+    }
+
+    // Find if any validation rule is associated with this function
+    const validationNode = validations.find((v: any) => v.shopifyFunction?.id === functionNode.id);
+
+    res.json({
+      success: true,
+      functionDeployed: true,
+      enabled: validationNode ? validationNode.enabled : false,
+      validationId: validationNode ? validationNode.id : null
+    });
+    } catch (err: any) {
+    res.status(500).json({ error: "Failed to retrieve checkout rule status", details: err.message });
+    }
+    });
+
+    // 7i. Enable or Disable Cart Validation Rule (Starter/Pro/Enterprise)
+    app.post("/api/checkout-rule/toggle", validateSession, async (req, res) => {
+    const session = req.body.session;
+    const { enabled } = req.body;
+
+    if (enabled === undefined) {
+    return res.status(400).json({ error: "Missing 'enabled' parameter in request body." });
+    }
+
+    if (isTestMode) {
+      return res.json({ success: true, enabled });
+    }
+
+    const getStatusQuery = `
+    query GetFunctionAndValidations {
+      shopifyFunctions(first: 50) {
+        nodes {
+          id
+          handle
+        }
+      }
+      validations(first: 50) {
+        nodes {
+          id
+          title
+          enabled
+          shopifyFunction {
+            id
+          }
+        }
+      }
+    }
+    `;
+
+    try {
+    // 1. Get current status to resolve function ID & validation ID
+    const statusRes = await fetch(`https://${session.shop}/admin/api/2026-10/graphql.json`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": session.accessToken
+      },
+      body: JSON.stringify({ query: getStatusQuery })
+    });
+
+    if (!statusRes.ok) {
+      throw new Error(`Failed to fetch current status: ${statusRes.statusText}`);
+    }
+
+    const statusBody = await statusRes.json();
+    const functions = statusBody.data?.shopifyFunctions?.nodes || [];
+    const validations = statusBody.data?.validations?.nodes || [];
+
+    const functionNode = functions.find((f: any) => f.handle === "prescription-validator");
+    if (!functionNode) {
+      return res.status(400).json({ error: "Checkout validation function is not deployed. Please run 'shopify app deploy' first." });
+    }
+
+    const validationNode = validations.find((v: any) => v.shopifyFunction?.id === functionNode.id);
+
+    // 2. Perform Create or Update based on existence
+    if (validationNode) {
+      // Rule exists, update enabled status (field is 'enable' in input type)
+      const updateMutation = `
+        mutation UpdateValidation($id: ID!, $validation: ValidationUpdateInput!) {
+          validationUpdate(id: $id, validation: $validation) {
+            validation {
+              id
+              enabled
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }
+      `;
+
+      const updateRes = await fetch(`https://${session.shop}/admin/api/2026-10/graphql.json`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Shopify-Access-Token": session.accessToken
+        },
+        body: JSON.stringify({
+          query: updateMutation,
+          variables: {
+            id: validationNode.id,
+            validation: {
+              enable: enabled
+            }
+          }
+        })
+      });
+
+      const updateBody = await updateRes.json();
+      const userErrors = updateBody.data?.validationUpdate?.userErrors || [];
+      if (userErrors.length > 0) {
+        return res.status(400).json({ error: "Shopify API update error", details: userErrors[0].message });
+      }
+
+      return res.json({ success: true, enabled: updateBody.data?.validationUpdate?.validation?.enabled });
+    } else {
+      // Rule does not exist, create it (field is 'enable' in input type)
+      const createMutation = `
+        mutation CreateValidation($validation: ValidationCreateInput!) {
+          validationCreate(validation: $validation) {
+            validation {
+              id
+              enabled
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }
+      `;
+
+      const createRes = await fetch(`https://${session.shop}/admin/api/2026-10/graphql.json`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Shopify-Access-Token": session.accessToken
+        },
+        body: JSON.stringify({
+          query: createMutation,
+          variables: {
+            validation: {
+              title: "Paws & Effect Prescription Gating",
+              functionHandle: "prescription-validator",
+              enable: enabled,
+              blockOnFailure: false
+            }
+          }
+        })
+      });
+
+      const createBody = await createRes.json();
+      const userErrors = createBody.data?.validationCreate?.userErrors || [];
+      if (userErrors.length > 0) {
+        return res.status(400).json({ error: "Shopify API creation error", details: userErrors[0].message });
+      }
+
+      return res.json({ success: true, enabled: createBody.data?.validationCreate?.validation?.enabled });
+    }
+    } catch (err: any) {
+    res.status(500).json({ error: "Failed to toggle checkout rule", details: err.message });
+    }
+    });
+
+    // 8. Serve beautiful, iframe-safe Shopify Polaris embedded App Dashboard
 app.get("/", (req, res) => {
   const shop = req.query.shop as string;
   const apiKey = process.env.SHOPIFY_API_KEY || "";
@@ -775,6 +1075,32 @@ app.get("/", (req, res) => {
         "x-test-session-id": mockSessionId,
         "x-shop-domain": shop
       };
+
+      // Auto-enable Cart Validation checkout rule on fresh install
+      React.useEffect(() => {
+        fetch("/api/checkout-rule/status", { headers })
+          .then(res => res.json())
+          .then(data => {
+            if (data.success && data.functionDeployed) {
+              if (data.validationId === null) {
+                // Brand new installation: Auto-enable the rule in the background silently!
+                fetch("/api/checkout-rule/toggle", {
+                  method: "POST",
+                  headers,
+                  body: JSON.stringify({ enabled: true })
+                })
+                .then(res => res.json())
+                .then(toggleData => {
+                  if (toggleData.success) {
+                    setToast("🏥 Prescription validation auto-enabled on your checkout!");
+                  }
+                })
+                .catch(() => {});
+              }
+            }
+          })
+          .catch(() => {});
+      }, []);
 
       // Sync active plan and recommendations on load
       React.useEffect(() => {

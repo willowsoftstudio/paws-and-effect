@@ -1,0 +1,40 @@
+{
+  "payload": {
+    "export": "cart-validations-generate-run",
+    "target": "cart.validations.generate.run",
+    "input": {
+      "cart": {
+        "lines": [
+          {
+            "quantity": 1,
+            "attribute": null,
+            "merchandise": {
+              "__typename": "ProductVariant",
+              "id": "gid://shopify/ProductVariant/123",
+              "title": "Prescription Kibble Variant",
+              "product": {
+                "id": "gid://shopify/Product/456",
+                "title": "Prescription Kibble Product",
+                "hasAnyTag": true
+              }
+            }
+          }
+        ]
+      }
+    },
+    "output": {
+      "operations": [
+        {
+          "validationAdd": {
+            "errors": [
+              {
+                "message": "⚕️ Verification Required: Please register your pet and upload their prescription before purchasing \"Prescription Kibble Product\".",
+                "target": "$.cart"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

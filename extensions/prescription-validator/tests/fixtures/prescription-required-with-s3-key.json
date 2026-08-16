@@ -1,0 +1,37 @@
+{
+  "payload": {
+    "export": "cart-validations-generate-run",
+    "target": "cart.validations.generate.run",
+    "input": {
+      "cart": {
+        "lines": [
+          {
+            "quantity": 1,
+            "attribute": {
+              "value": "prescriptions/session123/1715456_file.pdf"
+            },
+            "merchandise": {
+              "__typename": "ProductVariant",
+              "id": "gid://shopify/ProductVariant/123",
+              "title": "Prescription Kibble Variant",
+              "product": {
+                "id": "gid://shopify/Product/456",
+                "title": "Prescription Kibble Product",
+                "hasAnyTag": true
+              }
+            }
+          }
+        ]
+      }
+    },
+    "output": {
+      "operations": [
+        {
+          "validationAdd": {
+            "errors": []
+          }
+        }
+      ]
+    }
+  }
+}

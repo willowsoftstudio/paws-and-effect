@@ -3,10 +3,52 @@
   This renders as a customizable, responsive, drag-and-drop block inside the merchant's Theme Editor.
 {% endcomment %}
 
-{% if block.settings.display_mode == 'popup' %}
-  {% assign btn_display_style = "display: none;" %}
+{% comment %}
+  Gated Login Redirection: If this block is embedded on a dedicated 'my-pets' page
+  and the customer is not logged in, instantly redirect them to the secure Shopify account login page,
+  and redirect them back directly after a successful login!
+{% endcomment %}
+{% if request.page_type == 'page' and page.handle == 'my-pets' and customer == nil and request.design_mode == false %}
+  <script>
+    window.location.href = "/account/login?checkout_url=" + encodeURIComponent(window.location.href);
+  </script>
+{% endif %}
+
+{% assign is_prescription_required = false %}
+{% if product.tags contains 'prescription-required' or product.metafields.paws_effect.prescription_required.value == true %}
+  {% assign is_prescription_required = true %}
+{% endif %}
+
+{% if block.settings.embed_layout == 'inline' %}
+  {% assign is_inline = true %}
+  {% assign modal_position_style = "position: relative; display: block; background: none; width: 100%; height: auto; box-shadow: none; z-index: 1;" %}
+  
+  {% case block.settings.columns_desktop %}
+    {% when '1' %}
+      {% assign max_card_width = "500px" %}
+      {% assign grid_style = "display: grid; grid-template-columns: 1fr; gap: 16px;" %}
+    {% when '2' %}
+      {% assign max_card_width = "800px" %}
+      {% assign grid_style = "display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;" %}
+    {% when '3' %}
+      {% assign max_card_width = "1100px" %}
+      {% assign grid_style = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;" %}
+  {% endcase %}
+
+  {% assign card_container_style = "background-color: #fff; padding: 30px; border-radius: 12px; width: 100%; max-width: " | append: max_card_width | append: "; margin: 0 auto; box-shadow: none; border: 1px solid #e1e3e5; position: relative;" %}
+  {% assign close_button_style = "display: none;" %}
+  {% assign trigger_button_style = "display: none;" %}
 {% else %}
-  {% assign btn_display_style = "display: inline-block;" %}
+  {% assign is_inline = false %}
+  {% assign modal_position_style = "position: fixed; display: none; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(0, 0, 0, 0.6); z-index: 2147483647; align-items: center; justify-content: center; backdrop-filter: blur(4px);" %}
+  {% assign card_container_style = "background-color: #fff; padding: 30px; border-radius: 16px; width: 90%; max-width: 500px; box-shadow: 0 20px 40px rgba(0,0,0,0.3); position: relative;" %}
+  {% assign grid_style = "display: flex; flex-direction: column; gap: 12px;" %}
+  {% assign close_button_style = "display: block; position: absolute; top: 20px; right: 20px; background: none; border: none; font-size: 22px; cursor: pointer; color: #6d7175; font-weight: bold; transition: color 0.2s;" %}
+  {% if block.settings.display_mode == 'popup' %}
+    {% assign trigger_button_style = "display: none;" %}
+  {% else %}
+    {% assign trigger_button_style = "display: inline-block;" %}
+  {% endif %}
 {% endif %}
 
 {% case block.settings.button_size %}
@@ -30,8 +72,8 @@
     {% assign wrapper_alignment = "text-align: right;" %}
 {% endcase %}
 
-<!-- The wrapper div dynamically aligns and stretches across the theme section container -->
-<div class="paws-effect-storefront-section" style="margin: 30px 0; {{ wrapper_alignment }} display: block; width: 100%;">
+<!-- 1. The Trigger Button wrapper container (Only visible in Modal mode) -->
+<div class="paws-effect-storefront-section" style="margin: 30px 0; {{ wrapper_alignment }} {{ trigger_button_style }} width: 100%;">
   <button id="paws-effect-quiz-trigger" style="
     padding: {{ btn_padding }};
     font-size: {{ btn_font_size }};
@@ -43,56 +85,23 @@
     cursor: pointer;
     box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     transition: transform 0.2s, opacity 0.2s;
-    {{ btn_display_style }}
   " onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
     🐾 Manage My Pet Profile
   </button>
 </div>
 
-<!-- Full-Page, Semi-Transparent, Perfectly Centered Modal Overlay (Highest possible z-index) -->
-<div id="paws-effect-quiz-modal" style="
-  display: none;
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background-color: rgba(0, 0, 0, 0.6);
-  z-index: 2147483647;
-  align-items: center;
-  justify-content: center;
-  backdrop-filter: blur(4px); /* Gorgeous premium blur effect! */
-">
-  <div style="
-    background-color: #fff;
-    padding: 30px;
-    border-radius: 16px;
-    width: 90%;
-    max-width: 500px;
-    box-shadow: 0 20px 40px rgba(0,0,0,0.3);
-    position: relative;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    animation: pawsSlideIn 0.3s ease-out; /* Premium entry animation! */
-  ">
-    <button id="paws-effect-modal-close" style="
-      position: absolute;
-      top: 20px;
-      right: 20px;
-      background: none;
-      border: none;
-      font-size: 22px;
-      cursor: pointer;
-      color: #6d7175;
-      font-weight: bold;
-      transition: color 0.2s;
-    " onmouseover="this.style.color='#000'" onmouseout="this.style.color='#6d7175'">✕</button>
+<!-- 2. The Main Portal / Quiz Container (Statically Inline or Viewport Modal Overlay depending on setting!) -->
+<div id="paws-effect-quiz-modal" class="paws-portal-container-wrapper" style="{{ modal_position_style }}">
+  <div style="{{ card_container_style }} font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+    <button id="paws-effect-modal-close" style="{{ close_button_style }}" onmouseover="this.style.color='#000'" onmouseout="this.style.color='#6d7175'">✕</button>
     
     <!-- view 1: MY PETS PORTAL (LIST VIEW) -->
-    <div id="paws-effect-list-view">
+    <div id="paws-effect-list-view" style="display: none;">
       <h2 style="margin-top: 0; margin-bottom: 8px; font-size: 22px; color: {{ block.settings.button_bg_color }}; font-weight: bold;">My Registered Pets 🐾</h2>
       <p style="margin: 0 0 20px 0; font-size: 14px; color: #6d7175; line-height: 1.4;">Manage your registered pets, track weight records, and customize formulation feeds.</p>
       
-      <div id="paws-pets-container" style="max-height: 250px; overflow-y: auto; margin-bottom: 24px; border: 1px solid #e1e3e5; border-radius: 8px; padding: 10px;">
+      <!-- Responsive dynamic CSS grid container -->
+      <div id="paws-pets-container" style="max-height: 400px; overflow-y: auto; margin-bottom: 24px; border: 1px solid #e1e3e5; border-radius: 8px; padding: 12px; background-color: #fafbfc; {{ grid_style }}">
         <!-- Dynamically populated rows go here -->
       </div>
 
@@ -134,11 +143,45 @@
         <input type="text" id="paws-pet-allergies" placeholder="Allergies (comma separated, e.g. beef, chicken)" style="padding: 10px; border-radius: 6px; border: 1px solid #c9cccf; font-size: 14px; grid-column: span 2;">
         <input type="text" id="paws-pet-health" placeholder="Health Issues (comma separated, e.g. joint, sensitive stomach)" style="padding: 10px; border-radius: 6px; border: 1px solid #c9cccf; font-size: 14px; grid-column: span 2;">
         
+        <!-- AWS S3 Secure Prescription File Upload Section -->
+        <div id="paws-prescription-section" style="grid-column: span 2; margin-top: 8px; border: 1px dashed #c9cccf; border-radius: 8px; padding: 14px; background-color: #fafbfc;">
+          <label style="display: block; font-size: 13px; font-weight: bold; color: #4a5568; margin-bottom: 6px;">⚕️ Veterinary Prescription Document (PDF/Image - Optional)</label>
+          <input type="file" id="paws-prescription-file" accept="application/pdf,image/*" style="padding: 6px; font-size: 13px; width: 100%;">
+          <div id="paws-upload-progress" style="font-size: 12px; color: #008060; margin-top: 6px; font-weight: bold; display: none;">Uploading prescription to secure AWS S3 vault...</div>
+        </div>
+
         <div style="grid-column: span 2; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px;">
           <button id="paws-form-cancel-btn" type="button" style="padding: 12px; background-color: #f4f6f8; color: #4a5568; border: 1px solid #c9cccf; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 15px;">Cancel</button>
           <button type="submit" style="padding: 12px; background-color: {{ block.settings.button_bg_color }}; color: {{ block.settings.button_text_color }}; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">🐾 Save Profile</button>
         </div>
       </form>
+    </div>
+
+    <!-- view 3: GUEST ACCOUNT PROMPT (GUEST VIEW) -->
+    <div id="paws-effect-guest-view" style="display: none; text-align: center; padding: 10px 0;">
+      <div style="font-size: 55px; margin-bottom: 16px; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1));">🐕🐾🐈</div>
+      <h2 style="margin-top: 0; margin-bottom: 12px; font-size: 22px; color: {{ block.settings.button_bg_color }}; font-weight: bold;">Unlock Your Pet's Dashboard!</h2>
+      <p style="margin: 0 0 20px 0; font-size: 14px; color: #6d7175; line-height: 1.5; text-align: left;">
+        Sign in to create a customized profile for your pet! You will unlock:
+      </p>
+      <ul style="margin: 0 0 24px 0; padding-left: 20px; font-size: 14px; color: #4a5568; text-align: left; line-height: 1.6;">
+        <li>✨ Customized nutrition and feed recommendations matching their breed & age.</li>
+        <li>🚫 Allergy-safe product filters to automatically hide ingredients like beef or chicken.</li>
+        <li>📈 Monthly health and weight tracking with interactive progress charts.</li>
+      </ul>
+      <button id="paws-guest-login-btn" style="
+        width: 100%;
+        padding: 14px;
+        background-color: {{ block.settings.button_bg_color }};
+        color: {{ block.settings.button_text_color }};
+        border: none;
+        border-radius: 8px;
+        font-weight: bold;
+        cursor: pointer;
+        font-size: 16px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        transition: opacity 0.2s;
+      " onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">🐾 Sign In or Create Account</button>
     </div>
   </div>
 </div>
@@ -154,6 +197,12 @@
       transform: translateY(0) scale(1);
     }
   }
+
+  @media (max-width: 767px) {
+    #paws-pets-container {
+      grid-template-columns: 1fr !important; /* Forces 1-column layout on mobile viewports! */
+    }
+  }
 </style>
 
 <script>
@@ -163,41 +212,172 @@
     const closeBtn = document.getElementById("paws-effect-modal-close");
     const form = document.getElementById("paws-effect-quiz-form");
     
-    // Escape any relative/transformed parent containers by portaling the modal directly to document.body on load!
-    if (modal && modal.parentNode !== document.body) {
-      document.body.appendChild(modal);
-    }
-    
     // View Blocks
     const listView = document.getElementById("paws-effect-list-view");
     const formView = document.getElementById("paws-effect-form-view");
+    const guestView = document.getElementById("paws-effect-guest-view");
     const petsContainer = document.getElementById("paws-pets-container");
     
-    // Form buttons and titles
+    // Form buttons, files and titles
     const formTitle = document.getElementById("paws-form-title");
     const cancelFormBtn = document.getElementById("paws-form-cancel-btn");
     const addNewPetBtn = document.getElementById("paws-add-new-pet-btn");
+    const guestLoginBtn = document.getElementById("paws-guest-login-btn");
+    const fileInput = document.getElementById("paws-prescription-file");
+    const uploadProgress = document.getElementById("paws-upload-progress");
 
     // State Variables
     let customerPets = [];
     let editingPetId = null;
+    let uploadedPrescriptionKey = ""; // Stores S3 object key on upload success
 
     // Dynamic schema settings injected natively by Shopify
     const displayMode = "{{ block.settings.display_mode }}";
+    const embedLayout = "{{ block.settings.embed_layout }}";
     const popupDelay = {{ block.settings.popup_delay }} * 1000;
 
     // Dynamic Shop Domain resolved dynamically via Shopify Liquid!
     const shopDomain = "{{ shop.permanent_domain }}";
 
-    // Dynamic Customer ID (resolved dynamically if logged in, fallback tovisitor ID for guest checkout!)
+    // Dynamic Prescription Checking based on Shopify Liquid Product variables!
+    const isPrescriptionRequired = {% if is_prescription_required %}true{% else %}false{% endif %};
+
+    // Shopify Logged-in Customer Checking
+    const isCustomerLoggedIn = {% if customer %}true{% else %}false{% endif %};
+    let customerId = "";
+
     {% if customer %}
-      const customerId = "gid://shopify/Customer/{{ customer.id }}";
+      customerId = "gid://shopify/Customer/{{ customer.id }}";
     {% else %}
-      const customerId = "gid://shopify/Customer/123";
+      customerId = "guest_visitor";
     {% endif %}
+
+    // Portal Relocation: ONLY relocate modal to document.body if we are in Modal layout mode!
+    // Statically embedded inline forms MUST remain inside their local theme container to render inline on the page!
+    if (embedLayout !== "inline") {
+      if (modal && modal.parentNode !== document.body) {
+        document.body.appendChild(modal);
+      }
+    }
+
+    // A. Real-Time direct-to-S3 File Upload Handler
+    if (fileInput) {
+      fileInput.addEventListener("change", (ev) => {
+        const file = ev.target.files[0];
+        if (!file) return;
+
+        if (uploadProgress) {
+          uploadProgress.innerText = "⏳ Requesting secure S3 credentials...";
+          uploadProgress.style.display = "block";
+        }
+
+        // 1. Get AWS S3 PUT Presigned URL from Express backend
+        fetch("https://paws-and-effect-git-develop-willowsoftstudio-5437s-projects.vercel.app/api/vets/presigned-upload-url", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-test-session-id": "paws-portal-session",
+            "x-shop-domain": shopDomain
+          },
+          body: JSON.stringify({
+            filename: file.name,
+            contentType: file.type
+          })
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (data.success) {
+              if (uploadProgress) uploadProgress.innerText = "⏳ Securely uploading " + file.name + " directly to AWS S3...";
+
+              // 2. Upload file directly to S3 via secure PUT Signed URL
+              return fetch(data.uploadUrl, {
+                method: "PUT",
+                body: file,
+                headers: {
+                  "Content-Type": file.type
+                }
+              }).then(s3Res => {
+                if (s3Res.ok) {
+                  uploadedPrescriptionKey = data.objectKey; // Store S3 key!
+                  if (uploadProgress) uploadProgress.innerHTML = "✅ Prescription successfully uploaded to secure S3 vault!";
+                } else {
+                  throw new Error("S3 Upload failed");
+                }
+              });
+            } else {
+              throw new Error(data.error);
+            }
+          })
+          .catch(err => {
+            console.error("❌ AWS S3 Upload Error:", err);
+            if (uploadProgress) uploadProgress.innerHTML = "<span style='color: #991b1b;'>❌ S3 Upload Failed: " + err.message + "</span>";
+          });
+      });
+    }
+
+    // B. Intercept Shopify "Add to Cart" form for prescription-required gating!
+    const addToCartForm = document.querySelector('form[action="/cart/add"]');
+    if (addToCartForm && isPrescriptionRequired) {
+      addToCartForm.addEventListener("submit", (ev) => {
+        // Find if they have at least one pet with a prescription Url
+        const petWithPrescription = customerPets.find(p => p.prescriptionUrl && p.prescriptionUrl.trim() !== "");
+
+        if (!petWithPrescription) {
+          ev.preventDefault(); // Block add-to-cart!
+          alert("⚕️ Prescription Verification Required: To purchase this item, please register a pet and upload their veterinary prescription document!");
+          
+          // Open our gorgeous centered overlay modal so they can upload their S3 document on-the-spot!
+          if (modal) {
+            modal.style.display = "flex";
+            document.body.style.overflow = "hidden";
+          }
+          if (!isCustomerLoggedIn) {
+            listView.style.display = "none";
+            formView.style.display = "none";
+            guestView.style.display = "block";
+          } else {
+            guestView.style.display = "none";
+            if (customerPets.length > 0) {
+              if (listView) listView.style.display = "block";
+              if (formView) formView.style.display = "none";
+            } else {
+              if (listView) listView.style.display = "none";
+              if (formView) formView.style.display = "block";
+            }
+          }
+        } else {
+          // They have a valid S3 prescription on file!
+          // Dynamically inject the hidden Cart Line Item Properties before letting the form submit!
+          // This ties their S3 prescription keys permanently to their placed Shopify Order!
+          const petNameInput = document.createElement("input");
+          petNameInput.type = "hidden";
+          petNameInput.name = "properties[_Pet Name]";
+          petNameInput.value = petWithPrescription.name;
+          addToCartForm.appendChild(petNameInput);
+
+          const s3KeyInput = document.createElement("input");
+          s3KeyInput.type = "hidden";
+          s3KeyInput.name = "properties[_Prescription S3 Key]";
+          s3KeyInput.value = petWithPrescription.prescriptionUrl;
+          addToCartForm.appendChild(s3KeyInput);
+          
+          console.log("⚕️ Paws & Effect: Injected S3 Prescription key to Line Item properties:", petWithPrescription.prescriptionUrl);
+        }
+      });
+    }
 
     // 1. Fetch registered pets for customer on load
     function loadCustomerPets() {
+      if (!isCustomerLoggedIn) {
+        // If layout is inline, always render the guest login prompt statically directly on load
+        if (embedLayout === "inline") {
+          if (listView) listView.style.display = "none";
+          if (formView) formView.style.display = "none";
+          if (guestView) guestView.style.display = "block";
+        }
+        return;
+      }
+
       fetch("https://paws-and-effect-git-develop-willowsoftstudio-5437s-projects.vercel.app/api/pets/" + encodeURIComponent(customerId) + "/recommendations", {
         headers: {
           "x-test-session-id": "paws-portal-session",
@@ -216,14 +396,24 @@
             } else {
               if (trigger) trigger.innerText = "🐾 Create Pet Profile";
             }
+
+            // If layout is inline, always render the active state directly inside the container on boot
+            if (embedLayout === "inline") {
+              guestView.style.display = "none";
+              if (customerPets.length > 0) {
+                if (listView) listView.style.display = "block";
+                if (formView) formView.style.display = "none";
+              } else {
+                if (listView) listView.style.display = "none";
+                if (formView) formView.style.display = "block";
+              }
+            }
           }
         })
-        .catch(err => {
-          console.error("❌ Paws & Effect: Failed to load customer pets on startup:", err);
-        });
+        .catch(() => {});
     }
 
-    // 2. Render Pet profiles List inside Modal
+    // 2. Render Pet profiles List inside Modal / Grid Layout
     function renderPetsList() {
       if (!petsContainer) return;
       if (customerPets.length === 0) {
@@ -231,18 +421,44 @@
         return;
       }
 
-      petsContainer.innerHTML = customerPets.map(pet => `
-        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #e1e3e5;">
-          <div style="text-align: left;">
-            <div style="font-weight: bold; color: #000; font-size: 15px;">${pet.name} (${pet.petType})</div>
-            <div style="font-size: 13px; color: #6d7175;">${pet.breed || 'Unknown breed'} • ${pet.age ? pet.age + ' yrs' : 'Age unknown'}</div>
-          </div>
-          <div style="display: flex; gap: 8px;">
-            <button class="paws-edit-pet-btn" data-id="${pet.id}" style="padding: 6px 12px; background-color: #f4f6f8; color: #4a5568; border: 1px solid #c9cccf; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold;">Edit</button>
-            <button class="paws-delete-pet-btn" data-id="${pet.id}" style="padding: 6px 12px; background-color: #fee2e2; color: #991b1b; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold;">Delete</button>
-          </div>
-        </div>
-      `).join("");
+      const isInlineMode = (embedLayout === "inline");
+
+      petsContainer.innerHTML = customerPets.map(pet => {
+        const petEmoji = pet.petType === 'dog' ? '🐶' : (pet.petType === 'cat' ? '🐱' : '🐾');
+        
+        if (isInlineMode) {
+          // Render as a beautiful self-contained Grid Card for wide screen dashboards
+          return `
+            <div style="display: flex; flex-direction: column; justify-content: space-between; padding: 18px; border: 1px solid #e1e3e5; border-radius: 8px; background-color: #ffffff; box-shadow: 0 1px 3px rgba(0,0,0,0.05); text-align: left;">
+              <div style="margin-bottom: 16px;">
+                <div style="font-weight: bold; color: #000; font-size: 16px; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                  ${petEmoji} ${pet.name}
+                </div>
+                <div style="font-size: 13px; color: #4a5568; font-weight: 500; margin-bottom: 3px;">Breed: ${pet.breed || 'Unknown breed'}</div>
+                <div style="font-size: 13px; color: #6d7175;">Age: ${pet.age ? pet.age + ' yrs' : 'Age unknown'} • Weight: ${pet.weight ? pet.weight + ' kg' : 'Weight unknown'}</div>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: auto;">
+                <button class="paws-edit-pet-btn" data-id="${pet.id}" style="padding: 8px; background-color: #f4f6f8; color: #4a5568; border: 1px solid #c9cccf; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: bold; text-align: center; transition: background 0.2s;">Edit</button>
+                <button class="paws-delete-pet-btn" data-id="${pet.id}" style="padding: 8px; background-color: #fee2e2; color: #991b1b; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: bold; text-align: center; transition: background 0.2s;">Delete</button>
+              </div>
+            </div>
+          `;
+        } else {
+          // Render as compact inline list row for popup modals
+          return `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #e1e3e5;">
+              <div style="text-align: left;">
+                <div style="font-weight: bold; color: #000; font-size: 15px;">${petEmoji} ${pet.name}</div>
+                <div style="font-size: 13px; color: #6d7175;">${pet.breed || 'Unknown breed'} • ${pet.age ? pet.age + ' yrs' : 'Age unknown'}</div>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button class="paws-edit-pet-btn" data-id="${pet.id}" style="padding: 6px 12px; background-color: #f4f6f8; color: #4a5568; border: 1px solid #c9cccf; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold;">Edit</button>
+                <button class="paws-delete-pet-btn" data-id="${pet.id}" style="padding: 6px 12px; background-color: #fee2e2; color: #991b1b; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold;">Delete</button>
+              </div>
+            </div>
+          `;
+        }
+      }).join("");
 
       // Bind edit events
       document.querySelectorAll(".paws-edit-pet-btn").forEach(btn => {
@@ -282,7 +498,7 @@
               if (trigger) trigger.innerText = "🐾 Manage My Pet Profiles";
             } else {
               if (trigger) trigger.innerText = "🐾 Create Pet Profile";
-              // Toggle back to empty view inside modal
+              // Toggle back to empty view inside modal/inline block
               listView.style.display = "none";
               formView.style.display = "block";
             }
@@ -303,32 +519,49 @@
       document.getElementById("paws-pet-allergies").value = (pet.allergies || []).join(", ");
       document.getElementById("paws-pet-health").value = (pet.healthIssues || []).join(", ");
       
+      uploadedPrescriptionKey = pet.prescriptionUrl || "";
+      if (uploadProgress) {
+        if (uploadedPrescriptionKey) {
+          uploadProgress.innerHTML = "✅ Active prescription document found on file.";
+          uploadProgress.style.display = "block";
+        } else {
+          uploadProgress.style.display = "none";
+        }
+      }
+      if (fileInput) fileInput.value = ""; // Clear file selector
+
       listView.style.display = "none";
       formView.style.display = "block";
     }
 
     // --- Core Listener Bindings (Ensures Modal opens even if API is pending/failed) ---
 
-    // Open Modal Click Handler
-    if (trigger) {
+    // Open Modal Click Handler (Only triggers in Modal mode!)
+    if (trigger && embedLayout !== "inline") {
       trigger.addEventListener("click", () => {
         if (!modal) return;
         modal.style.display = "flex";
         document.body.style.overflow = "hidden"; // Prevent page scrolling
         
-        // Show List View if pets exist, otherwise show Form View directly
-        if (customerPets.length > 0) {
-          if (listView) listView.style.display = "block";
-          if (formView) formView.style.display = "none";
+        if (!isCustomerLoggedIn) {
+          listView.style.display = "none";
+          formView.style.display = "none";
+          guestView.style.display = "block";
         } else {
-          if (listView) listView.style.display = "none";
-          if (formView) formView.style.display = "block";
+          guestView.style.display = "none";
+          if (customerPets.length > 0) {
+            if (listView) listView.style.display = "block";
+            if (formView) formView.style.display = "none";
+          } else {
+            if (listView) listView.style.display = "none";
+            if (formView) formView.style.display = "block";
+          }
         }
       });
     }
 
-    // Auto Pop-up Trigger (runs on load if mode is popup or both)
-    if (displayMode === "popup" || displayMode === "both") {
+    // Auto Pop-up Trigger (runs on load if mode is popup or both, and NOT inline)
+    if (embedLayout !== "inline" && (displayMode === "popup" || displayMode === "both")) {
       setTimeout(() => {
         if (!modal) return;
         // Retrieve close status from sessionStorage so it doesn't pop up repeatedly
@@ -340,12 +573,19 @@
           modal.style.display = "flex";
           document.body.style.overflow = "hidden";
           
-          if (customerPets.length > 0) {
-            if (listView) listView.style.display = "block";
-            if (formView) formView.style.display = "none";
+          if (!isCustomerLoggedIn) {
+            listView.style.display = "none";
+            formView.style.display = "none";
+            guestView.style.display = "block";
           } else {
-            if (listView) listView.style.display = "none";
-            if (formView) formView.style.display = "block";
+            guestView.style.display = "none";
+            if (customerPets.length > 0) {
+              if (listView) listView.style.display = "block";
+              if (formView) formView.style.display = "none";
+            } else {
+              if (listView) listView.style.display = "none";
+              if (formView) formView.style.display = "block";
+            }
           }
         }
       }, popupDelay);
@@ -355,8 +595,11 @@
     if (addNewPetBtn) {
       addNewPetBtn.addEventListener("click", () => {
         editingPetId = null;
+        uploadedPrescriptionKey = "";
         if (formTitle) formTitle.innerText = "Create Pet Profile";
         if (form) form.reset();
+        if (uploadProgress) uploadProgress.style.display = "none";
+        if (fileInput) fileInput.value = "";
         if (listView) listView.style.display = "none";
         if (formView) formView.style.display = "block";
       });
@@ -369,14 +612,16 @@
           if (formView) formView.style.display = "none";
           if (listView) listView.style.display = "block";
         } else {
-          if (modal) modal.style.display = "none";
-          document.body.style.overflow = "auto";
+          if (embedLayout !== "inline") {
+            if (modal) modal.style.display = "none";
+            document.body.style.overflow = "auto";
+          }
         }
       });
     }
 
-    // Close Modal Button (X)
-    if (closeBtn) {
+    // Close Modal Button (X) (Only active in Modal mode!)
+    if (closeBtn && embedLayout !== "inline") {
       closeBtn.addEventListener("click", () => {
         if (modal) modal.style.display = "none";
         document.body.style.overflow = "auto";
@@ -384,29 +629,45 @@
       });
     }
 
-    // --- Native Shopify Theme Editor Selection Events ---
-    // Instantly pops modal open when merchant clicks on block, and closes it when they click away!
-    document.addEventListener("shopify:block:select", (event) => {
-      if (event.detail.blockId === "{{ block.id }}" && modal) {
-        modal.style.display = "flex";
-        document.body.style.overflow = "hidden";
-        
-        if (customerPets.length > 0) {
-          if (listView) listView.style.display = "block";
-          if (formView) formView.style.display = "none";
-        } else {
-          if (listView) listView.style.display = "none";
-          if (formView) formView.style.display = "block";
-        }
-      }
-    });
+    // Sign In / Create Account Click Button (Guest View)
+    if (guestLoginBtn) {
+      guestLoginBtn.addEventListener("click", () => {
+        window.location.href = "/account/login";
+      });
+    }
 
-    document.addEventListener("shopify:block:deselect", (event) => {
-      if (event.detail.blockId === "{{ block.id }}" && modal) {
-        modal.style.display = "none";
-        document.body.style.overflow = "auto";
-      }
-    });
+    // --- Native Shopify Theme Editor Selection Events ---
+    // Instantly pops modal open when merchant clicks on block, and closes it when they click away! (Only in Modal mode!)
+    if (embedLayout !== "inline") {
+      document.addEventListener("shopify:block:select", (event) => {
+        if (event.detail.blockId === "{{ block.id }}" && modal) {
+          modal.style.display = "flex";
+          document.body.style.overflow = "hidden";
+          
+          if (!isCustomerLoggedIn) {
+            listView.style.display = "none";
+            formView.style.display = "none";
+            guestView.style.display = "block";
+          } else {
+            guestView.style.display = "none";
+            if (customerPets.length > 0) {
+              if (listView) listView.style.display = "block";
+              if (formView) formView.style.display = "none";
+            } else {
+              if (listView) listView.style.display = "none";
+              if (formView) formView.style.display = "block";
+            }
+          }
+        }
+      });
+
+      document.addEventListener("shopify:block:deselect", (event) => {
+        if (event.detail.blockId === "{{ block.id }}" && modal) {
+          modal.style.display = "none";
+          document.body.style.overflow = "auto";
+        }
+      });
+    }
 
     // Load initial pets list on boot
     loadCustomerPets();
@@ -429,7 +690,8 @@
           weight: rawWeight,
           activityLevel: document.getElementById("paws-pet-activity").value,
           allergies: document.getElementById("paws-pet-allergies").value.split(",").map(s => s.trim()).filter(s => s !== ""),
-          healthIssues: document.getElementById("paws-pet-health").value.split(",").map(s => s.trim()).filter(s => s !== "")
+          healthIssues: document.getElementById("paws-pet-health").value.split(",").map(s => s.trim()).filter(s => s !== ""),
+          prescriptionUrl: uploadedPrescriptionKey // Pass secure S3 key to PostgreSQL!
         };
 
         const url = editingPetId 
@@ -477,12 +739,33 @@
 {
   "name": "Pet Profile Quiz",
   "target": "section",
-  "templates": ["index", "product", "cart"],
+  "templates": ["index", "product", "cart", "page"],
   "settings": [
     {
       "type": "select",
+      "id": "embed_layout",
+      "label": "Block Layout",
+      "options": [
+        { "value": "modal", "label": "Button triggers Modal Dialog (Popup)" },
+        { "value": "inline", "label": "Full Portal rendered Directly In-line on Page" }
+      ],
+      "default": "modal"
+    },
+    {
+      "type": "select",
+      "id": "columns_desktop",
+      "label": "Inline Grid Columns (Inline Layout only)",
+      "options": [
+        { "value": "1", "label": "1 Column" },
+        { "value": "2", "label": "2 Columns" },
+        { "value": "3", "label": "3 Columns" }
+      ],
+      "default": "1"
+    },
+    {
+      "type": "select",
       "id": "display_mode",
-      "label": "Display Mode",
+      "label": "Display Mode (Modal Layout only)",
       "options": [
         { "value": "button", "label": "Display Button Only" },
         { "value": "popup", "label": "Auto Pop-up Only" },

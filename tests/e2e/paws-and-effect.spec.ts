@@ -235,16 +235,56 @@ test.describe("Paws & Effect E2E Tests — Billing, Feature Gating, and Recommen
     expect(s3ViewFailRes.status()).toBe(400);
     expect((await s3ViewFailRes.json()).error).toBe("No prescription document uploaded for this pet.");
 
-    // J. Manually inject a mock prescription key and verify GET View URL succeeds
-    await prisma.petProfile.update({
-      where: { id: maxPetId },
-      data: { prescriptionUrl: s3UploadBody.objectKey }
+    // J. Update the profile with prescription key via the PUT API endpoint and verify GET View URL succeeds
+    const putRes = await request.put(`/api/pets/profile/${maxPetId}`, {
+      headers,
+      data: {
+        name: "Max",
+        petType: "dog",
+        prescriptionUrl: s3UploadBody.objectKey
+      }
     });
+    expect(putRes.status()).toBe(200);
+    const putBody = await putRes.json();
+    expect(putBody.success).toBe(true);
+    expect(putBody.profile.prescriptionUrl).toBe(s3UploadBody.objectKey);
 
     const s3ViewSuccessRes = await request.get(`/api/pets/presigned-view-url/${maxPetId}`, { headers });
     expect(s3ViewSuccessRes.status()).toBe(200);
     const s3ViewBody = await s3ViewSuccessRes.json();
     expect(s3ViewBody.success).toBe(true);
     expect(s3ViewBody.viewUrl).toContain("amazonaws.com"); // Contains the real secure AWS signed URL!
+  });
+
+  test("4. Should be able to query checkout-rule status and toggle it on/off dynamically", async ({ request }) => {
+    const headers = {
+      "x-test-session-id": testSessionId,
+      "x-shop-domain": shopDomain
+    };
+
+    // A. Query status endpoint and verify active check works
+    const statusRes = await request.get("/api/checkout-rule/status", { headers });
+    expect(statusRes.status()).toBe(200);
+    const statusBody = await statusRes.json();
+    expect(statusBody.success).toBe(true);
+    expect(statusBody.functionDeployed).toBe(true);
+    expect(statusBody.enabled).toBe(true);
+    expect(statusBody.validationId).toBe("gid://shopify/Validation/mock-id-123");
+
+    // B. Toggle status off and verify success
+    const toggleOffRes = await request.post("/api/checkout-rule/toggle", {
+      headers,
+      data: { enabled: false }
+    });
+    expect(toggleOffRes.status()).toBe(200);
+    expect((await toggleOffRes.json()).enabled).toBe(false);
+
+    // C. Toggle status back on and verify success
+    const toggleOnRes = await request.post("/api/checkout-rule/toggle", {
+      headers,
+      data: { enabled: true }
+    });
+    expect(toggleOnRes.status()).toBe(200);
+    expect((await toggleOnRes.json()).enabled).toBe(true);
   });
 });
