@@ -21,7 +21,9 @@ export const shopify = shopifyApp({
       "read_validations",
       "read_orders"
     ],
-    hostName: process.env.HOST ? process.env.HOST.replace(/https?:\/\//, "") : "localhost:3001",
+    hostName: process.env.HOST 
+      ? process.env.HOST.replace(/https?:\/\//, "") 
+      : (process.env.VERCEL_URL ? process.env.VERCEL_URL : "localhost:3001"),
     restResources: undefined,
     billing: undefined
   },
