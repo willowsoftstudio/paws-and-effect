@@ -229,7 +229,8 @@ test.describe("Paws & Effect E2E Tests — Billing, Feature Gating, and Recommen
     const proxyUploadRes = await request.post("/api/pets/upload-prescription?filename=e2e_prescription.pdf", {
       headers: {
         ...headers,
-        "Content-Type": "application/pdf"
+        "Content-Type": "application/pdf",
+        "x-customer-id": "gid://shopify/Customer/123"
       },
       data: Buffer.from("MOCK_PDF_FILE_BINARY_CONTENT") // Send raw mock file content!
     });
@@ -237,6 +238,7 @@ test.describe("Paws & Effect E2E Tests — Billing, Feature Gating, and Recommen
     const proxyUploadBody = await proxyUploadRes.json();
     expect(proxyUploadBody.success).toBe(true);
     expect(proxyUploadBody.objectKey).toContain("prescriptions/");
+    expect(proxyUploadBody.objectKey).toContain("/123/"); // Asserts strict, secure path locking per customer!
 
     // Retrieve Max's pet profile ID to test view URL
     const profiles = await prisma.petProfile.findMany({ where: { shop: shopDomain, name: "Max" } });
