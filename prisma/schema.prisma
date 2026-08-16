@@ -24,6 +24,9 @@ model Session {
   accountOwner        Boolean?
   locale              String?
   collaborator        Boolean?
+  emailVerified       Boolean?
+  refreshToken        String?
+  refreshTokenExpires DateTime?
 
   // Veterinary Integration Credentials (Enterprise)
   vetProvider         String    @default("NONE") // "NONE", "COVETRUS", "VETSOURCE"
