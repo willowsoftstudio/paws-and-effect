@@ -342,4 +342,25 @@ test.describe("Paws & Effect E2E Tests — Billing, Feature Gating, and Recommen
     expect(webhookBody.success).toBe(true);
     expect(webhookBody.tagged).toBe(true);
   });
+
+  test("6. Webhook - Should automatically process GDPR compliance redactions", async ({ request }) => {
+    const headers = {
+      "x-test-session-id": testSessionId,
+      "x-shopify-shop-domain": shopDomain,
+      "x-shopify-topic": "customers/redact"
+    };
+
+    // A. Verify customers/redact returns 200 OK and executes successfully
+    const redactRes = await request.post("/api/webhooks/compliance", {
+      headers,
+      data: {
+        customer: { id: 12345 },
+        shop_domain: shopDomain
+      }
+    });
+
+    expect(redactRes.status()).toBe(200);
+    const redactBody = await redactRes.json();
+    expect(redactBody.success).toBe(true);
+  });
 });

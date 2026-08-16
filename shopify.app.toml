@@ -16,9 +16,53 @@ topics = [ "orders/create" ]
 uri = "/api/webhooks/orders-create"
 
 [access_scopes]
-scopes = "write_products,read_products,write_customers,read_customers,write_draft_orders,write_validations,read_validations"
+scopes = "write_products,read_products,write_customers,read_customers,write_draft_orders,write_validations,read_validations,read_orders"
 
 [auth]
 redirect_urls = [
   "https://paws-and-effect.vercel.app/api/auth/callback"
 ]
+
+# ==============================================================================
+# 🩺 PAWS & EFFECT APP — PRODUCTION DEPLOYMENT, SECURITY, & TROUBLESHOOTING GUIDE
+# ==============================================================================
+#
+# 🔒 PRIVACY & SECURITY COMPLIANCE (GDPR / PCD):
+# - This app is approved for "Protected Customer Data" (PCD) because it processes
+#   customer names and emails to verify medical prescriptions.
+# - Required Access Scopes: write_products, read_products, write_customers, 
+#   read_customers, write_draft_orders, write_validations, read_validations, read_orders.
+#
+# 📄 TERMS OF USE & MERCHANT LICENSE:
+# - Install Consent: By installing, the merchant agrees to our Data Processing Addendum (DPA).
+# - Customer Data Redaction: When a merchant uninstalls, our "shop/redact" webhook 
+#   instantly purges all registered pet profiles and sessions from our database.
+#
+# 🛠️ HOW TO USE & ACTIVATE THE APP:
+# 1. Compile the high-performance Cart Validation Function:
+#    👉 pnpm --filter paws-and-effect build
+# 2. Deploy your WASM binary and Polaris extensions to Shopify:
+#    👉 pnpm --filter paws-and-effect deploy
+# 3. Enable the "Paws Gate Embed" inside your Online Store Theme Editor:
+#    👉 Customize Theme ➔ App Embeds (Left Sidebar) ➔ Toggle Paws Gate Embed ON ➔ Save!
+# 4. Activate the Checkout Validation Rule inside Shopify Settings:
+#    👉 Settings ➔ Checkout ➔ Checkout Rules ➔ Add "Paws & Effect Prescription Gating" ➔ Activate!
+#
+# 🚨 COMMON DEPLOYMENT ERRORS & SOLUTIONS:
+#
+# 🟥 ERROR: "Missing scope for webhook topic: orders/create (read_orders ...)"
+# 🔍 Why: The "orders/create" webhook topic requires the "read_orders" access scope.
+# ✅ Solve: Verify that "read_orders" is present in your "scopes" list above, run 
+#           "shopify app deploy", and open your App Dashboard to grant the new scope.
+#
+# 🟥 ERROR: "This app is not approved to subscribe to webhook topics containing protected customer data"
+# 🔍 Why: Shopify restricts access to order webhooks unless Protected Customer Data (PCD) is enabled.
+# ✅ Solve: Go to your Shopify Partner Dashboard ➔ Select App ➔ API Access ➔ Scroll to 
+#           "Protected customer data access" ➔ Click "Request access" ➔ Select Name/Email/Address ➔
+#           Save! (Do NOT submit for review, it is instantly approved for dev stores!)
+#
+# 🟥 ERROR: "Failed to fetch" (S3 Upload Error on Storefront)
+# 🔍 Why: The storefront tried to upload a file but S3 blocked it due to CORS policy, or the backend is offline.
+# ✅ Solve: Ensure your local dev server is running, your tunnel is active, and your AWS S3 bucket 
+#           CORS AllowedOrigins whitelists your Shopify storefront domain (e.g. "*.myshopify.com").
+# ==============================================================================
