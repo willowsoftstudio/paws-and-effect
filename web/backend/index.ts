@@ -480,10 +480,19 @@ app.get("/api/pets/:customerId/recommendations", validateStorefrontSession, asyn
         matchingReasons: ["Top Selling Formula! Take our Pet Quiz to unlock personalized formulation feeds."]
       }));
 
+      // Format into nested pet-recommendation block schema to prevent frontend crashes
+      const nestedRecommendations = [
+        {
+          petName: "All Pets (Store Catalog)",
+          petType: "Default Feed",
+          recommendations: defaultRecommendations
+        }
+      ];
+
       return res.json({ 
         success: true, 
         profiles: [], 
-        recommendations: defaultRecommendations, 
+        recommendations: nestedRecommendations, 
         message: "No pet profiles found. Displaying default premium catalog fallback." 
       });
     }
