@@ -170,10 +170,10 @@ async function fetchShopifyProducts(shop: string, accessToken: string) {
 }
 
 // Shopify App OAuth Installation Handlers
-app.get(shopify.config.auth.path, shopify.redirectToAuth());
+app.get(shopify.config.auth.path, shopify.auth.begin());
 app.get(
   shopify.config.auth.callbackPath,
-  shopify.actions.repository.callback(),
+  shopify.auth.callback(),
   shopify.redirectToShopifyOrAppRoot()
 );
 
@@ -209,7 +209,55 @@ async function validateSession(req: express.Request, res: express.Response, next
     req.body.session = res.locals.shopify.session;
     next();
   });
-}
+  }
+
+  // Storefront Session Loader (For Customer Storefront-facing Routes - No Admin Auth required!)
+  async function validateStorefrontSession(req: express.Request, res: express.Response, next: express.NextFunction) {
+  if (isTestMode) {
+    // In local E2E test runs, bypass and mock the session
+    const sessionId = req.headers["x-test-session-id"] as string || "paws-portal-session";
+    const shop = req.headers["x-shop-domain"] as string || "paws-e2e-shop.myshopify.com";
+    try {
+      let session = await prisma.session.findUnique({ where: { id: sessionId } });
+      if (!session) {
+        session = await prisma.session.create({
+          data: {
+            id: sessionId,
+            shop,
+            state: "active_mock",
+            accessToken: "mock_token",
+            plan: "STARTER"
+          }
+        });
+      }
+      req.body.session = session;
+      return next();
+    } catch (err: any) {
+      return res.status(500).json({ error: "Test session storage error", details: err.message });
+    }
+  }
+
+  const shop = req.headers["x-shop-domain"] as string || "test-shop.myshopify.com";
+  try {
+    // Dynamically load the session for this shop domain (uses "mock_token" if no OAuth session exists yet)
+    let session = await prisma.session.findFirst({ where: { shop } });
+    if (!session) {
+      session = await prisma.session.create({
+        data: {
+          id: `storefront_${shop}`,
+          shop,
+          state: "storefront_active",
+          accessToken: "mock_token",
+          plan: "STARTER"
+        }
+      });
+    }
+    req.body.session = session;
+    next();
+  } catch (err: any) {
+    res.status(500).json({ error: "Storefront session storage error", details: err.message });
+  }
+  }
 
 // 1. Health Check
 app.get("/api/health", (req, res) => {
@@ -237,7 +285,7 @@ app.patch("/api/billing", validateSession, async (req, res) => {
 });
 
 // 3. Pet Profiles: Create or Update Profile
-app.post("/api/pets/profile", validateSession, async (req, res) => {
+app.post("/api/pets/profile", validateStorefrontSession, async (req, res) => {
   const { customerId, name, petType, breed, age, weight, activityLevel, allergies, healthIssues, prescriptionUrl } = req.body;
   const session = req.body.session;
 
@@ -298,7 +346,7 @@ app.post("/api/pets/profile", validateSession, async (req, res) => {
 });
 
 // 3b. Pet Profiles: Update Existing Profile
-app.put("/api/pets/profile/:id", validateSession, async (req, res) => {
+app.put("/api/pets/profile/:id", validateStorefrontSession, async (req, res) => {
   const { id } = req.params;
   const { name, petType, breed, age, weight, activityLevel, allergies, healthIssues, prescriptionUrl } = req.body;
   const session = req.body.session;
@@ -335,7 +383,7 @@ app.put("/api/pets/profile/:id", validateSession, async (req, res) => {
 });
 
 // 3c. Pet Profiles: Delete Existing Profile
-app.delete("/api/pets/profile/:id", validateSession, async (req, res) => {
+app.delete("/api/pets/profile/:id", validateStorefrontSession, async (req, res) => {
   const { id } = req.params;
   const session = req.body.session;
 
@@ -355,7 +403,7 @@ app.delete("/api/pets/profile/:id", validateSession, async (req, res) => {
 });
 
 // 4. Product Recommendations with Allergy-Safe Filtering
-app.get("/api/pets/:customerId/recommendations", validateSession, async (req, res) => {
+app.get("/api/pets/:customerId/recommendations", validateStorefrontSession, async (req, res) => {
   const { customerId } = req.params;
   const session = req.body.session;
 
@@ -483,7 +531,7 @@ app.get("/api/pets/:customerId/recommendations", validateSession, async (req, re
 });
 
 // 5. Health Tracking: Log Health Metrics (PRO + ENTERPRISE gated)
-app.post("/api/pets/:id/health", validateSession, async (req, res) => {
+app.post("/api/pets/:id/health", validateStorefrontSession, async (req, res) => {
   const { id } = req.params;
   const { weight, activityScore, notes } = req.body;
   const session = req.body.session;
@@ -521,7 +569,7 @@ app.post("/api/pets/:id/health", validateSession, async (req, res) => {
 });
 
 // 6. Community Reviews (PRO + ENTERPRISE gated)
-app.get("/api/community/reviews", validateSession, async (req, res) => {
+app.get("/api/community/reviews", validateStorefrontSession, async (req, res) => {
   const session = req.body.session;
 
   if (session.plan === "STARTER") {
@@ -655,7 +703,7 @@ const MOCK_PRACTICES = [
 ];
 
 // 7e. Search Vet Practice Directory (Enterprise/Sandbox autocomplete lookup)
-app.get("/api/vets/search", validateSession, (req, res) => {
+app.get("/api/vets/search", validateStorefrontSession, (req, res) => {
   const query = (req.query.q as string || "").toLowerCase();
 
   // Filter practices
@@ -697,7 +745,7 @@ app.post("/api/vets/presigned-upload-url", validateSession, async (req, res) => 
 });
 
 // 7g. AWS S3: Generate Secure Presigned GET URL for Private View Access (Starter/Pro/Enterprise)
-app.get("/api/pets/presigned-view-url/:petProfileId", validateSession, async (req, res) => {
+app.get("/api/pets/presigned-view-url/:petProfileId", validateStorefrontSession, async (req, res) => {
   const { petProfileId } = req.params;
   const session = req.body.session;
 
@@ -729,7 +777,7 @@ app.get("/api/pets/presigned-view-url/:petProfileId", validateSession, async (re
     });
 
   // 7f-2. AWS S3: API-Proxied Secure Upload (Starter/Pro/Enterprise)
-  app.post("/api/pets/upload-prescription", express.raw({ type: "*/*", limit: "10mb" }), validateSession, async (req, res) => {
+  app.post("/api/pets/upload-prescription", express.raw({ type: "*/*", limit: "10mb" }), validateStorefrontSession, async (req, res) => {
     const session = req.body.session;
     const filename = req.query.filename as string || "prescription.pdf";
     const contentType = req.headers["content-type"] as string || "application/pdf";
@@ -798,7 +846,7 @@ app.get("/api/pets/presigned-view-url/:petProfileId", validateSession, async (re
     });
 
     // 7h. Fetch Cart Validation Rule Status (Starter/Pro/Enterprise)
-    app.get("/api/checkout-rule/status", validateSession, async (req, res) => {
+    app.get("/api/checkout-rule/status", validateStorefrontSession, async (req, res) => {
     const session = req.body.session;
 
     if (isTestMode) {
