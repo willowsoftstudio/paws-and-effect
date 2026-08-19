@@ -205,6 +205,43 @@
     function verifyGatingAndPrompt(productTitle, onSelectPetCallback, onCancelCallback) {
       if (!isPrescriptionRequired) return true; // Normal product: skip block
 
+      // Resolve Asynchronous load-time race condition
+      if (isCustomerLoggedIn && !window.isPawsPetsLoaded) {
+        if (modal) {
+          modal.style.display = "flex";
+          document.body.style.overflow = "hidden";
+        }
+        listView.style.display = "none";
+        formView.style.display = "none";
+        choosePetView.style.display = "none";
+        guestView.style.display = "none";
+
+        let loader = document.getElementById("paws-loading-indicator");
+        if (!loader) {
+          loader = document.createElement("div");
+          loader.id = "paws-loading-indicator";
+          loader.innerHTML = `<div style="text-align: center; padding: 40px; color: #008060; font-size: 16px; font-weight: bold; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">⚕️ Verifying prescription records, please wait...</div>`;
+          // Find the modal card container and append our loader
+          const modalContainer = modal.querySelector("div[style*='card_container_style']") || modal.children[0];
+          if (modalContainer) modalContainer.appendChild(loader);
+        }
+        loader.style.display = "block";
+
+        if (window.pawsPetsLoadingPromise) {
+          window.pawsPetsLoadingPromise.then(() => {
+            loader.style.display = "none";
+            verifyGatingAndPrompt(productTitle, onSelectPetCallback, onCancelCallback);
+          });
+        } else {
+          // Fallback if promise didn't set yet
+          setTimeout(() => {
+            loader.style.display = "none";
+            verifyGatingAndPrompt(productTitle, onSelectPetCallback, onCancelCallback);
+          }, 800);
+        }
+        return false;
+      }
+
       // Filter registered pets to find those that have an S3 prescription uploaded on-file
       const eligiblePets = customerPets.filter(p => p.prescriptionUrl && p.prescriptionUrl.trim() !== "");
       
@@ -213,8 +250,6 @@
 
       // Case 1: No valid prescriptions on file (either 0 registered pets, or all are expired/missing)
       if (validPets.length === 0) {
-        alert("⚕️ Prescription Verification Required: To purchase \"" + productTitle + "\", please register your pet and upload their active veterinary prescription document!");
-        
         if (modal) {
           modal.style.display = "flex";
           document.body.style.overflow = "hidden";
@@ -226,14 +261,25 @@
           choosePetView.style.display = "none";
           guestView.style.display = "block";
         } else {
-          guestView.style.display = "none";
-          listView.style.display = "none";
-          choosePetView.style.display = "none";
-          
-          // Pre-populate Form with dynamic helpful warning
-          if (formTitle) formTitle.innerText = "⚕️ Register Pet & Upload Prescription";
-          if (formDescription) formDescription.innerHTML = "<strong style='color: #b00;'>🔒 Gated Product:</strong> To purchase \"" + productTitle + "\", please fill out this quick profile and upload their veterinary prescription PDF/image:";
-          formView.style.display = "block";
+          // If customer has registered pet profiles, do NOT force them to register a new one!
+          // Instead, route them directly to the listView of their existing pets where they can edit & upload!
+          if (customerPets.length > 0) {
+            alert("⚕️ Prescription Verification Required: Please select an existing pet to upload or renew their prescription.");
+            guestView.style.display = "none";
+            formView.style.display = "none";
+            choosePetView.style.display = "none";
+            listView.style.display = "block";
+          } else {
+            alert("⚕️ Prescription Verification Required: To purchase \"" + productTitle + "\", please register your pet and upload their active veterinary prescription document!");
+            guestView.style.display = "none";
+            listView.style.display = "none";
+            choosePetView.style.display = "none";
+            
+            // Pre-populate Form with dynamic helpful warning
+            if (formTitle) formTitle.innerText = "⚕️ Register Pet & Upload Prescription";
+            if (formDescription) formDescription.innerHTML = "<strong style='color: #b00;'>🔒 Gated Product:</strong> To purchase \"" + productTitle + "\", please fill out this quick profile and upload their veterinary prescription PDF/image:";
+            formView.style.display = "block";
+          }
         }
         return false;
       }
@@ -571,10 +617,16 @@
       }
     });
 
-    function loadCustomerPets() {
-      if (!isCustomerLoggedIn) return;
+    window.isPawsPetsLoaded = false;
+    window.pawsPetsLoadingPromise = null;
 
-      fetch(backendApiUrl + "/api/pets/" + encodeURIComponent(customerId) + "/recommendations", {
+    function loadCustomerPets() {
+      if (!isCustomerLoggedIn) {
+        window.isPawsPetsLoaded = true;
+        return;
+      }
+
+      window.pawsPetsLoadingPromise = fetch(backendApiUrl + "/api/pets/" + encodeURIComponent(customerId) + "/recommendations", {
         headers: {
           "x-test-session-id": "paws-portal-session",
           "x-shop-domain": shopDomain
@@ -582,12 +634,15 @@
       })
         .then(res => res.json())
         .then(data => {
+          window.isPawsPetsLoaded = true;
           if (data.success) {
             customerPets = data.profiles || [];
             renderPetsList();
           }
         })
-        .catch(() => {});
+        .catch(() => {
+          window.isPawsPetsLoaded = true;
+        });
     }
 
     function renderPetsList() {
@@ -876,9 +931,57 @@
             alert("❌ Connection Error: Failed to save pet profile.");
           });
       });
+      }
+      })();
+
+  // --- Storefront Cart & Drawer Url-to-Clickable-Link Converter ---
+  function convertPrescriptionUrlsToLinks() {
+    const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
+    const textNodes = [];
+    let node;
+    while (node = walk.nextNode()) {
+      if (node.nodeValue && node.nodeValue.includes("/api/vets/view-prescription")) {
+        textNodes.push(node);
+      }
     }
-  })();
-</script>
+
+    textNodes.forEach(node => {
+      const parent = node.parentNode;
+      if (!parent || parent.tagName === "A" || parent.tagName === "SCRIPT" || parent.tagName === "STYLE" || parent.tagName === "TEXTAREA" || parent.tagName === "INPUT") return;
+
+      const originalText = node.nodeValue;
+      const urlRegex = /(https?:\/\/[^\s"']+view-prescription[^\s"']+)/g;
+      if (urlRegex.test(originalText)) {
+        const tempSpan = document.createElement("span");
+        tempSpan.innerHTML = originalText.replace(urlRegex, (url) => {
+          return `<a href="${url}" target="_blank" style="color: #008060; text-decoration: underline; font-weight: bold;">View Prescription ⚕️</a>`;
+        });
+        parent.replaceChild(tempSpan, node);
+      }
+    });
+  }
+
+      if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", convertPrescriptionUrlsToLinks);
+      } else {
+      convertPrescriptionUrlsToLinks();
+      }
+      window.addEventListener("load", convertPrescriptionUrlsToLinks);
+
+      const cartObserver = new MutationObserver((mutations) => {
+      let shouldScan = false;
+      for (const mutation of mutations) {
+      if (mutation.addedNodes.length > 0) {
+       shouldScan = true;
+       break;
+      }
+      }
+      if (shouldScan) {
+      convertPrescriptionUrlsToLinks();
+      }
+      });
+      cartObserver.observe(document.body, { childList: true, subtree: true });
+      </script>
 
 {% schema %}
 {
