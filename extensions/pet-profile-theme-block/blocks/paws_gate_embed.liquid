@@ -357,6 +357,8 @@
       if (oldKey) oldKey.remove();
       const oldLabel = targetForm.querySelector('input[name="properties[Prescription]"]');
       if (oldLabel) oldLabel.remove();
+      const oldLink = targetForm.querySelector('input[name="properties[Prescription Link]"]');
+      if (oldLink) oldLink.remove();
 
       const petIdInput = document.createElement("input");
       petIdInput.type = "hidden";
@@ -379,10 +381,15 @@
       const prescriptionLabel = document.createElement("input");
       prescriptionLabel.type = "hidden";
       prescriptionLabel.name = "properties[Prescription]";
-      // Build evergreen backend redirect proxy URL
-      const viewRedirectUrl = backendApiUrl + "/api/vets/view-prescription?key=" + encodeURIComponent(pet.prescriptionUrl);
-      prescriptionLabel.value = "✓ Uploaded (Pet: " + pet.name + ") | View: " + viewRedirectUrl;
+      prescriptionLabel.value = "✓ Uploaded (Pet: " + pet.name + ")";
       targetForm.appendChild(prescriptionLabel);
+
+      const prescriptionLink = document.createElement("input");
+      prescriptionLink.type = "hidden";
+      prescriptionLink.name = "properties[Prescription Link]";
+      const viewRedirectUrl = backendApiUrl + "/api/vets/view-prescription?key=" + encodeURIComponent(pet.prescriptionUrl);
+      prescriptionLink.value = viewRedirectUrl;
+      targetForm.appendChild(prescriptionLink);
     }
 
     // --- Dynamic Interception Layer 1: Document Forms (Submit Actions) ---
@@ -444,7 +451,8 @@
                         item.properties["_Pet Name"] = selectedPet.name;
                         item.properties["_Prescription S3 Key"] = selectedPet.prescriptionUrl;
                         const viewRedirectUrl = backendApiUrl + "/api/vets/view-prescription?key=" + encodeURIComponent(selectedPet.prescriptionUrl);
-                        item.properties["Prescription"] = "✓ Uploaded (Pet: " + selectedPet.name + ") | View: " + viewRedirectUrl;
+                        item.properties["Prescription"] = "✓ Uploaded (Pet: " + selectedPet.name + ")";
+                        item.properties["Prescription Link"] = viewRedirectUrl;
                       });
                       options.body = JSON.stringify(bodyObj);
                     } else {
@@ -453,7 +461,8 @@
                       bodyObj.properties["_Pet Name"] = selectedPet.name;
                       bodyObj.properties["_Prescription S3 Key"] = selectedPet.prescriptionUrl;
                       const viewRedirectUrl = backendApiUrl + "/api/vets/view-prescription?key=" + encodeURIComponent(selectedPet.prescriptionUrl);
-                      bodyObj.properties["Prescription"] = "✓ Uploaded (Pet: " + selectedPet.name + ") | View: " + viewRedirectUrl;
+                      bodyObj.properties["Prescription"] = "✓ Uploaded (Pet: " + selectedPet.name + ")";
+                      bodyObj.properties["Prescription Link"] = viewRedirectUrl;
                       options.body = JSON.stringify(bodyObj);
                     }
                   } else if (options.body instanceof FormData) {
@@ -461,7 +470,8 @@
                     options.body.set("properties[_Pet Name]", selectedPet.name);
                     options.body.set("properties[_Prescription S3 Key]", selectedPet.prescriptionUrl);
                     const viewRedirectUrl = backendApiUrl + "/api/vets/view-prescription?key=" + encodeURIComponent(selectedPet.prescriptionUrl);
-                    options.body.set("properties[Prescription]", "✓ Uploaded (Pet: " + selectedPet.name + ") | View: " + viewRedirectUrl);
+                    options.body.set("properties[Prescription]", "✓ Uploaded (Pet: " + selectedPet.name + ")");
+                    options.body.set("properties[Prescription Link]", viewRedirectUrl);
                   }
                 } catch (e) {}
               }
@@ -511,7 +521,8 @@
                   params.set("properties[_Pet Name]", selectedPet.name);
                   params.set("properties[_Prescription S3 Key]", selectedPet.prescriptionUrl);
                   const viewRedirectUrl = backendApiUrl + "/api/vets/view-prescription?key=" + encodeURIComponent(selectedPet.prescriptionUrl);
-                  params.set("properties[Prescription]", "✓ Uploaded (Pet: " + selectedPet.name + ") | View: " + viewRedirectUrl);
+                  params.set("properties[Prescription]", "✓ Uploaded (Pet: " + selectedPet.name + ")");
+                  params.set("properties[Prescription Link]", viewRedirectUrl);
                   arguments[0] = params.toString();
                 }
               } catch (e) {}
@@ -810,38 +821,41 @@
                   trappedSubmitEvent = null;
                   targetForm.submit();
                 } else if (trappedFetchArgs) {
-                  // Re-evaluate fetch with newly registered pet
-                  const options = trappedFetchArgs[1] || {};
-                  if (options.body) {
-                    try {
-                      if (typeof options.body === "string") {
-                        const bodyObj = JSON.parse(options.body);
-                        if (bodyObj.items && Array.isArray(bodyObj.items)) {
-                          bodyObj.items.forEach(item => {
-                            if (!item.properties) item.properties = {};
-                            item.properties["_Pet ID"] = newPet.id;
-                            item.properties["_Pet Name"] = newPet.name;
-                            item.properties["_Prescription S3 Key"] = newPet.prescriptionUrl;
-                            const viewRedirectUrl = backendApiUrl + "/api/vets/view-prescription?key=" + encodeURIComponent(newPet.prescriptionUrl);
-                            item.properties["Prescription"] = "✓ Uploaded (Pet: " + newPet.name + ") | View: " + viewRedirectUrl;
-                          });
-                          options.body = JSON.stringify(bodyObj);
-                        } else {
-                          if (!bodyObj.properties) bodyObj.properties = {};
-                          bodyObj.properties["_Pet ID"] = newPet.id;
-                          bodyObj.properties["_Pet Name"] = newPet.name;
-                          bodyObj.properties["_Prescription S3 Key"] = newPet.prescriptionUrl;
-                          const viewRedirectUrl = backendApiUrl + "/api/vets/view-prescription?key=" + encodeURIComponent(newPet.prescriptionUrl);
-                          bodyObj.properties["Prescription"] = "✓ Uploaded (Pet: " + newPet.name + ") | View: " + viewRedirectUrl;
-                          options.body = JSON.stringify(bodyObj);
-                        }
-                      } else if (options.body instanceof FormData) {
-                        options.body.set("properties[_Pet ID]", newPet.id);
-                        options.body.set("properties[_Pet Name]", newPet.name);
-                        options.body.set("properties[_Prescription S3 Key]", newPet.prescriptionUrl);
-                        const viewRedirectUrl = backendApiUrl + "/api/vets/view-prescription?key=" + encodeURIComponent(newPet.prescriptionUrl);
-                        options.body.set("properties[Prescription]", "✓ Uploaded (Pet: " + newPet.name + ") | View: " + viewRedirectUrl);
-                      }
+                 // Re-evaluate fetch with newly registered pet
+                 const options = trappedFetchArgs[1] || {};
+                 if (options.body) {
+                   try {
+                     if (typeof options.body === "string") {
+                       const bodyObj = JSON.parse(options.body);
+                       if (bodyObj.items && Array.isArray(bodyObj.items)) {
+                         bodyObj.items.forEach(item => {
+                           if (!item.properties) item.properties = {};
+                           item.properties["_Pet ID"] = newPet.id;
+                           item.properties["_Pet Name"] = newPet.name;
+                           item.properties["_Prescription S3 Key"] = newPet.prescriptionUrl;
+                           const viewRedirectUrl = backendApiUrl + "/api/vets/view-prescription?key=" + encodeURIComponent(newPet.prescriptionUrl);
+                           item.properties["Prescription"] = "✓ Uploaded (Pet: " + newPet.name + ")";
+                           item.properties["Prescription Link"] = viewRedirectUrl;
+                         });
+                         options.body = JSON.stringify(bodyObj);
+                       } else {
+                         if (!bodyObj.properties) bodyObj.properties = {};
+                         bodyObj.properties["_Pet ID"] = newPet.id;
+                         bodyObj.properties["_Pet Name"] = newPet.name;
+                         bodyObj.properties["_Prescription S3 Key"] = newPet.prescriptionUrl;
+                         const viewRedirectUrl = backendApiUrl + "/api/vets/view-prescription?key=" + encodeURIComponent(newPet.prescriptionUrl);
+                         bodyObj.properties["Prescription"] = "✓ Uploaded (Pet: " + newPet.name + ")";
+                         bodyObj.properties["Prescription Link"] = viewRedirectUrl;
+                         options.body = JSON.stringify(bodyObj);
+                       }
+                     } else if (options.body instanceof FormData) {
+                       options.body.set("properties[_Pet ID]", newPet.id);
+                       options.body.set("properties[_Pet Name]", newPet.name);
+                       options.body.set("properties[_Prescription S3 Key]", newPet.prescriptionUrl);
+                       const viewRedirectUrl = backendApiUrl + "/api/vets/view-prescription?key=" + encodeURIComponent(newPet.prescriptionUrl);
+                       options.body.set("properties[Prescription]", "✓ Uploaded (Pet: " + newPet.name + ")");
+                       options.body.set("properties[Prescription Link]", viewRedirectUrl);
+                     }
                     } catch (e) {}
                   }
                   originalFetch.apply(window, trappedFetchArgs).then(trappedFetchResolve).catch(trappedFetchReject);
