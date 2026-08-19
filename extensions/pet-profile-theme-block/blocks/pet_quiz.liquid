@@ -21,9 +21,8 @@
 {% endif %}
 
 {% if block.settings.embed_layout == 'inline' %}
-  {% assign is_inline = true %}
   {% assign modal_position_style = "position: relative; display: block; background: none; width: 100%; height: auto; box-shadow: none; z-index: 1;" %}
-  
+
   {% case block.settings.columns_desktop %}
     {% when '1' %}
       {% assign max_card_width = "500px" %}
@@ -40,7 +39,6 @@
   {% assign close_button_style = "display: none;" %}
   {% assign trigger_button_style = "display: none;" %}
 {% else %}
-  {% assign is_inline = false %}
   {% assign modal_position_style = "position: fixed; display: none; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(0, 0, 0, 0.6); z-index: 2147483647; align-items: center; justify-content: center; backdrop-filter: blur(4px);" %}
   {% assign card_container_style = "background-color: #fff; padding: 30px; border-radius: 16px; width: 90%; max-width: 500px; box-shadow: 0 20px 40px rgba(0,0,0,0.3); position: relative;" %}
   {% assign grid_style = "display: flex; flex-direction: column; gap: 12px;" %}
@@ -92,7 +90,7 @@
 </div>
 
 <!-- 2. The Main Portal / Quiz Container (Statically Inline or Viewport Modal Overlay depending on setting!) -->
-<div id="paws-effect-quiz-modal" class="paws-portal-container-wrapper" style="{{ modal_position_style }}">
+<div id="paws-effect-quiz-modal" class="paws-portal-container-wrapper" style="{{ modal_position_style }}" data-layout="{{ block.settings.embed_layout }}">
   <div style="{{ card_container_style }} font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
     <button id="paws-effect-modal-close" style="{{ close_button_style }}" onmouseover="this.style.color='#000'" onmouseout="this.style.color='#6d7175'">✕</button>
     
@@ -199,9 +197,47 @@
     }
   }
 
+  /* Modal mode: display as overlay */
+  #paws-effect-quiz-modal[data-layout="modal"] {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    background-color: rgba(0, 0, 0, 0.6) !important;
+    z-index: 2147483647 !important;
+    display: none !important;
+    align-items: center !important;
+    justify-content: center !important;
+    backdrop-filter: blur(4px) !important;
+  }
+
+  #paws-effect-quiz-modal[data-layout="modal"].visible {
+    display: flex !important;
+  }
+
+  /* Inline mode: display inline */
+  #paws-effect-quiz-modal[data-layout="inline"] {
+    position: relative !important;
+    display: block !important;
+    top: auto !important;
+    left: auto !important;
+    width: 100% !important;
+    height: auto !important;
+    background-color: transparent !important;
+    z-index: 1 !important;
+    align-items: unset !important;
+    justify-content: unset !important;
+    backdrop-filter: none !important;
+  }
+
+  #paws-effect-quiz-modal[data-layout="inline"] > div {
+    margin: 0 auto !important;
+  }
+
   @media (max-width: 767px) {
     #paws-pets-container {
-      grid-template-columns: 1fr !important; /* Forces 1-column layout on mobile viewports! */
+      grid-template-columns: 1fr !important;
     }
   }
 </style>
@@ -253,13 +289,8 @@
       customerId = "guest_visitor";
     {% endif %}
 
-    // Portal Relocation: ONLY relocate modal to document.body if we are in Modal layout mode!
-    // Statically embedded inline forms MUST remain inside their local theme container to render inline on the page!
-    if (embedLayout !== "inline") {
-      if (modal && modal.parentNode !== document.body) {
-        document.body.appendChild(modal);
-      }
-    }
+    // No portal relocation needed - CSS and positioning handle both modes
+    // This avoids DOM manipulation issues in the theme editor
 
     // A. Real-Time API-Proxied File Upload Handler
     if (fileInput) {
@@ -482,7 +513,7 @@
         ev.stopPropagation();
 
         if (!modal) return;
-        modal.style.display = "flex";
+        modal.classList.add("visible");
         document.body.style.overflow = "hidden"; // Prevent page scrolling
 
         if (!isCustomerLoggedIn) {
@@ -511,8 +542,8 @@
         const isDesignMode = window.Shopify && window.Shopify.designMode;
 
         // Bypasses the close token block if merchant is actively customizing in Theme Editor (isDesignMode)!
-        if (modal.style.display !== "flex" && (!hasClosedQuiz || isDesignMode)) {
-          modal.style.display = "flex";
+        if (!modal.classList.contains("visible") && (!hasClosedQuiz || isDesignMode)) {
+          modal.classList.add("visible");
           document.body.style.overflow = "hidden";
           
           if (!isCustomerLoggedIn) {
@@ -555,7 +586,7 @@
           if (listView) listView.style.display = "block";
         } else {
           if (embedLayout !== "inline") {
-            if (modal) modal.style.display = "none";
+            if (modal) modal.classList.remove("visible");
             document.body.style.overflow = "auto";
           }
         }
@@ -565,7 +596,7 @@
     // Close Modal Button (X) (Only active in Modal mode!)
     if (closeBtn && embedLayout !== "inline") {
       closeBtn.addEventListener("click", () => {
-        if (modal) modal.style.display = "none";
+        if (modal) modal.classList.remove("visible");
         document.body.style.overflow = "auto";
         sessionStorage.setItem("paws-quiz-closed", "true"); // Save close action in session
       });
@@ -580,12 +611,14 @@
 
     // --- Native Shopify Theme Editor Selection Events ---
     // Instantly pops modal open when merchant clicks on block, and closes it when they click away! (Only in Modal mode!)
-    if (embedLayout !== "inline") {
-      document.addEventListener("shopify:block:select", (event) => {
-        if (event.detail.blockId === "{{ block.id }}" && modal) {
-          modal.style.display = "flex";
+    document.addEventListener("shopify:block:select", (event) => {
+      if (event.detail.blockId === "{{ block.id }}" && modal) {
+        // Check the current layout from data attribute
+        const currentLayout = modal.getAttribute("data-layout");
+        if (currentLayout !== "inline") {
+          modal.classList.add("visible");
           document.body.style.overflow = "hidden";
-          
+
           if (!isCustomerLoggedIn) {
             listView.style.display = "none";
             formView.style.display = "none";
@@ -601,15 +634,18 @@
             }
           }
         }
-      });
+      }
+    });
 
-      document.addEventListener("shopify:block:deselect", (event) => {
-        if (event.detail.blockId === "{{ block.id }}" && modal) {
-          modal.style.display = "none";
+    document.addEventListener("shopify:block:deselect", (event) => {
+      if (event.detail.blockId === "{{ block.id }}" && modal) {
+        const currentLayout = modal.getAttribute("data-layout");
+        if (currentLayout !== "inline") {
+          modal.classList.remove("visible");
           document.body.style.overflow = "auto";
         }
-      });
-    }
+      }
+    });
 
     // Load initial pets list on boot
     loadCustomerPets();

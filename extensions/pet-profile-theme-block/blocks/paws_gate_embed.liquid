@@ -10,12 +10,12 @@
 {% endif %}
 
 <!-- The Main Overlay Modal (Kept completely hidden until triggered) -->
-<div id="paws-effect-quiz-modal" class="paws-portal-container-wrapper" style="position: fixed; display: none; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(0, 0, 0, 0.6); z-index: 2147483647; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+<div id="paws-gate-quiz-modal" class="paws-portal-container-wrapper" style="position: fixed; display: none; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(0, 0, 0, 0.6); z-index: 2147483647; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
   <div style="background-color: #fff; padding: 30px; border-radius: 16px; width: 90%; max-width: 500px; box-shadow: 0 20px 40px rgba(0,0,0,0.3); position: relative; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-    <button id="paws-effect-modal-close" style="display: block; position: absolute; top: 20px; right: 20px; background: none; border: none; font-size: 22px; cursor: pointer; color: #6d7175; font-weight: bold;" onmouseover="this.style.color='#000'" onmouseout="this.style.color='#6d7175'">✕</button>
+    <button id="paws-gate-modal-close" style="display: block; position: absolute; top: 20px; right: 20px; background: none; border: none; font-size: 22px; cursor: pointer; color: #6d7175; font-weight: bold;" onmouseover="this.style.color='#000'" onmouseout="this.style.color='#6d7175'">✕</button>
     
     <!-- View 1: My Registered Pets (Dashboard View) -->
-    <div id="paws-effect-list-view" style="display: none;">
+    <div id="paws-gate-list-view" style="display: none;">
       <h2 style="margin-top: 0; margin-bottom: 8px; font-size: 22px; color: {{ block.settings.primary_color | default: '#008060' }}; font-weight: bold;">My Registered Pets 🐾</h2>
       <p style="margin: 0 0 20px 0; font-size: 14px; color: #6d7175; line-height: 1.4;">Manage your registered pets, track weight records, and customize formulation feeds.</p>
       
@@ -25,11 +25,11 @@
     </div>
 
     <!-- View 2: Form Profile View -->
-    <div id="paws-effect-form-view" style="display: none;">
+    <div id="paws-gate-form-view" style="display: none;">
       <h2 id="paws-form-title" style="margin-top: 0; margin-bottom: 8px; font-size: 22px; color: {{ block.settings.primary_color | default: '#008060' }}; font-weight: bold;">Create Pet Profile 🐾</h2>
       <p id="paws-form-description" style="margin: 0 0 20px 0; font-size: 14px; color: #6d7175; line-height: 1.4;">Tell us about your pet, and we'll customize their formulation feeds and filter out allergens!</p>
 
-      <form id="paws-effect-quiz-form" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+      <form id="paws-gate-quiz-form" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
         <input type="text" id="paws-pet-name" placeholder="Pet Name (e.g. Max)" required style="padding: 10px; border-radius: 6px; border: 1px solid #c9cccf; font-size: 14px;">
         <select id="paws-pet-type" style="padding: 10px; border-radius: 6px; border: 1px solid #c9cccf; font-size: 14px;">
           <option value="dog">Dog</option>
@@ -62,7 +62,7 @@
     </div>
 
     <!-- View 3: Guest Login View -->
-    <div id="paws-effect-guest-view" style="display: none; text-align: center; padding: 10px 0;">
+    <div id="paws-gate-guest-view" style="display: none; text-align: center; padding: 10px 0;">
       <div style="font-size: 55px; margin-bottom: 16px;">🐕🐾🐈</div>
       <h2 style="margin-top: 0; margin-bottom: 12px; font-size: 22px; color: {{ block.settings.primary_color | default: '#008060' }}; font-weight: bold;">Unlock Your Pet's Dashboard!</h2>
       <p style="margin: 0 0 20px 0; font-size: 14px; color: #6d7175; line-height: 1.5; text-align: left;">Sign in to create a customized profile for your pet and unlock prescription uploads.</p>
@@ -70,7 +70,7 @@
     </div>
 
     <!-- View 4: Choose Pet View (For Multi-Pet Selection on Add to Cart) -->
-    <div id="paws-effect-choose-pet-view" style="display: none; text-align: left;">
+    <div id="paws-gate-choose-pet-view" style="display: none; text-align: left;">
       <h2 style="margin-top: 0; margin-bottom: 8px; font-size: 22px; color: {{ block.settings.primary_color | default: '#008060' }}; font-weight: bold;">Who is this prescription for? ⚕️</h2>
       <p style="margin: 0 0 16px 0; font-size: 14px; color: #4a5568; line-height: 1.4; font-weight: 500;">Please select which registered pet has the veterinary prescription for "<span id="paws-choose-product-name" style="font-weight: bold; color: #000;"></span>":</p>
       
@@ -88,14 +88,14 @@
 
 <script>
   (function() {
-    const modal = document.getElementById("paws-effect-quiz-modal");
-    const closeBtn = document.getElementById("paws-effect-modal-close");
-    const form = document.getElementById("paws-effect-quiz-form");
+    const modal = document.getElementById("paws-gate-quiz-modal");
+    const closeBtn = document.getElementById("paws-gate-modal-close");
+    const form = document.getElementById("paws-gate-quiz-form");
     
-    const listView = document.getElementById("paws-effect-list-view");
-    const formView = document.getElementById("paws-effect-form-view");
-    const guestView = document.getElementById("paws-effect-guest-view");
-    const choosePetView = document.getElementById("paws-effect-choose-pet-view");
+    const listView = document.getElementById("paws-gate-list-view");
+    const formView = document.getElementById("paws-gate-form-view");
+    const guestView = document.getElementById("paws-gate-guest-view");
+    const choosePetView = document.getElementById("paws-gate-choose-pet-view");
     
     const petsContainer = document.getElementById("paws-pets-container");
     const choosePetsList = document.getElementById("paws-choose-pets-list");
@@ -541,13 +541,28 @@
           }
         });
       }
-      return originalFetch.apply(this, args);
+      const fetchPromise = originalFetch.apply(this, args);
+      if (url && (url.includes("/cart") || url.includes("/cart.js"))) {
+        fetchPromise.then(() => {
+          setTimeout(convertPrescriptionUrlsToLinks, 100);
+          setTimeout(convertPrescriptionUrlsToLinks, 400);
+          setTimeout(convertPrescriptionUrlsToLinks, 800);
+        }).catch(() => {});
+      }
+      return fetchPromise;
     };
 
     // --- Dynamic Interception Layer 3: XMLHttpRequest ---
     const originalOpen = XMLHttpRequest.prototype.open;
     XMLHttpRequest.prototype.open = function(method, url) {
       this._cartAddUrl = url;
+      if (url && (url.includes("/cart") || url.includes("/cart.js"))) {
+        this.addEventListener("load", () => {
+          setTimeout(convertPrescriptionUrlsToLinks, 100);
+          setTimeout(convertPrescriptionUrlsToLinks, 400);
+          setTimeout(convertPrescriptionUrlsToLinks, 800);
+        });
+      }
       return originalOpen.apply(this, arguments);
     };
 
@@ -950,7 +965,7 @@
       if (!parent || parent.tagName === "A" || parent.tagName === "SCRIPT" || parent.tagName === "STYLE" || parent.tagName === "TEXTAREA" || parent.tagName === "INPUT") return;
 
       const originalText = node.nodeValue;
-      const urlRegex = /(https?:\/\/[^\s"']+view-prescription[^\s"']+)/g;
+      const urlRegex = /((?:https?:\/\/[^\s"']*)?\/api\/vets\/view-prescription[^\s"']*)/g;
       if (urlRegex.test(originalText)) {
         const tempSpan = document.createElement("span");
         tempSpan.innerHTML = originalText.replace(urlRegex, (url) => {
@@ -961,26 +976,29 @@
     });
   }
 
-      if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", convertPrescriptionUrlsToLinks);
-      } else {
-      convertPrescriptionUrlsToLinks();
-      }
-      window.addEventListener("load", convertPrescriptionUrlsToLinks);
+       if (document.readyState === "loading") {
+       document.addEventListener("DOMContentLoaded", convertPrescriptionUrlsToLinks);
+       } else {
+       convertPrescriptionUrlsToLinks();
+       }
+       window.addEventListener("load", convertPrescriptionUrlsToLinks);
 
-      const cartObserver = new MutationObserver((mutations) => {
-      let shouldScan = false;
-      for (const mutation of mutations) {
-      if (mutation.addedNodes.length > 0) {
-       shouldScan = true;
-       break;
-      }
-      }
-      if (shouldScan) {
-      convertPrescriptionUrlsToLinks();
-      }
-      });
-      cartObserver.observe(document.body, { childList: true, subtree: true });
+       const cartObserver = new MutationObserver((mutations) => {
+       let shouldScan = false;
+       for (const mutation of mutations) {
+       if (mutation.addedNodes.length > 0) {
+        shouldScan = true;
+        break;
+       }
+       }
+       if (shouldScan) {
+       convertPrescriptionUrlsToLinks();
+       }
+       });
+       cartObserver.observe(document.body, { childList: true, subtree: true });
+
+       // Periodic fallback scanner to catch delayed, asynchronous, or React re-renders
+       setInterval(convertPrescriptionUrlsToLinks, 1500);
       </script>
 
 {% schema %}
