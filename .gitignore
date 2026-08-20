@@ -21,3 +21,6 @@ coverage/
 
 # OS Files
 .DS_Store
+
+# Generated Prisma Client
+web/backend/prisma-client/
