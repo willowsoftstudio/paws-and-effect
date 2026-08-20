@@ -1,0 +1,579 @@
+{% comment %}
+  Paws & Effect Storefront Pet Profile Quiz App Block (Strict Inline Edition)
+  This renders the quiz/portal statically, in-line directly on the page, with absolutely no buttons or overlays.
+{% endcomment %}
+
+{% comment %}
+  Gated Login Redirection: If this block is embedded on a dedicated 'my-pets' page
+  and the customer is not logged in, instantly redirect them to the secure Shopify account login page,
+  and redirect them back directly after a successful login!
+{% endcomment %}
+{% if request.page_type == 'page' and page.handle == 'my-pets' and customer == nil and request.design_mode == false %}
+  <script>
+    window.location.href = "/account/login?checkout_url=" + encodeURIComponent(window.location.href);
+  </script>
+{% endif %}
+
+{% assign is_prescription_required = false %}
+{% assign lower_tags = product.tags | join: ',' | downcase %}
+{% if lower_tags contains 'prescription-required' or lower_tags contains 'prescription required' or lower_tags contains 'prescription_required' or product.metafields.paws_effect.prescription_required.value == true %}
+  {% assign is_prescription_required = true %}
+{% endif %}
+
+{% assign modal_position_style = "position: relative; display: block; background: none; width: 100%; height: auto; box-shadow: none; z-index: 1;" %}
+
+{% case block.settings.columns_desktop %}
+  {% when '1' %}
+    {% assign max_card_width = "500px" %}
+    {% assign grid_style = "display: grid; grid-template-columns: 1fr; gap: 16px;" %}
+  {% when '2' %}
+    {% assign max_card_width = "800px" %}
+    {% assign grid_style = "display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;" %}
+  {% when '3' %}
+    {% assign max_card_width = "1100px" %}
+    {% assign grid_style = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;" %}
+{% endcase %}
+
+{% assign card_container_style = "background-color: #fff; padding: 30px; border-radius: 12px; width: 100%; max-width: " | append: max_card_width | append: "; margin: 0 auto; box-shadow: none; border: 1px solid #e1e3e5; position: relative;" %}
+
+<style>
+  .paws-inline-card {
+    background: #ffffff;
+    border: 1px solid #e1e3e5;
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.02);
+    transition: transform 0.2s, box-shadow 0.2s;
+    position: relative;
+    box-sizing: border-box;
+  }
+
+  .paws-inline-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0,0,0,0.05);
+  }
+
+  /* Responsive Grid Adjustments */
+  @media screen and (max-width: 768px) {
+    #paws-pets-inline-container {
+      grid-template-columns: 1fr !important;
+    }
+  }
+</style>
+
+<!-- The Main Portal / Quiz Container (Statically Inline!) -->
+<div id="paws-effect-quiz-inline" style="{{ modal_position_style }}">
+  <div style="{{ card_container_style }} font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+    
+    <!-- view 1: MY PETS PORTAL (LIST VIEW) -->
+    <div id="paws-effect-list-view-inline" style="display: none;">
+      <h2 style="margin-top: 0; margin-bottom: 8px; font-size: 22px; color: {{ block.settings.button_bg_color }}; font-weight: bold;">My Registered Pets 🐾</h2>
+      <p style="margin: 0 0 20px 0; font-size: 14px; color: #6d7175; line-height: 1.4;">Manage your registered pets, track weight records, and customize formulation feeds.</p>
+      
+      <!-- Responsive dynamic CSS grid container -->
+      <div id="paws-pets-inline-container" style="max-height: 600px; overflow-y: auto; margin-bottom: 24px; border: 1px solid #e1e3e5; border-radius: 8px; padding: 12px; background-color: #fafbfc; {{ grid_style }}">
+        <!-- Dynamically populated rows go here -->
+      </div>
+
+      <button id="paws-add-new-pet-btn-inline" style="
+        width: 100%;
+        padding: 12px;
+        background-color: {{ block.settings.button_bg_color }};
+        color: {{ block.settings.button_text_color }};
+        border: none;
+        border-radius: 8px;
+        font-weight: bold;
+        cursor: pointer;
+        font-size: 15px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      ">➕ Register Another Pet</button>
+    </div>
+
+    <!-- view 2: THE REGISTRATION / EDIT QUIZ FORM -->
+    <div id="paws-effect-form-view-inline" style="display: none;">
+      <h2 id="paws-form-title-inline" style="margin-top: 0; margin-bottom: 20px; font-size: 22px; color: {{ block.settings.button_bg_color }}; font-weight: bold;">🐾 Register Your Pet</h2>
+      
+      <form id="paws-effect-quiz-form-inline">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+          
+          <div style="display: flex; flex-direction: column;">
+            <label style="font-size: 12px; font-weight: bold; color: #6d7175; margin-bottom: 6px; text-transform: uppercase;">Pet Name *</label>
+            <input type="text" id="paws-pet-name-inline" required style="padding: 10px; border: 1px solid #c9cccf; border-radius: 6px; font-size: 14px;">
+          </div>
+
+          <div style="display: flex; flex-direction: column;">
+            <label style="font-size: 12px; font-weight: bold; color: #6d7175; margin-bottom: 6px; text-transform: uppercase;">Pet Type *</label>
+            <select id="paws-pet-type-inline" required style="padding: 10px; border: 1px solid #c9cccf; border-radius: 6px; font-size: 14px; background-color: #fff;">
+              <option value="dog">Dog 🐶</option>
+              <option value="cat">Cat 🐱</option>
+              <option value="other">Other 🐾</option>
+            </select>
+          </div>
+
+          <div style="display: flex; flex-direction: column;">
+            <label style="font-size: 12px; font-weight: bold; color: #6d7175; margin-bottom: 6px; text-transform: uppercase;">Breed</label>
+            <input type="text" id="paws-pet-breed-inline" placeholder="e.g. Golden Retriever" style="padding: 10px; border: 1px solid #c9cccf; border-radius: 6px; font-size: 14px;">
+          </div>
+
+          <div style="display: flex; flex-direction: column;">
+            <label style="font-size: 12px; font-weight: bold; color: #6d7175; margin-bottom: 6px; text-transform: uppercase;">Age (years)</label>
+            <input type="number" id="paws-pet-age-inline" min="0" max="30" step="1" style="padding: 10px; border: 1px solid #c9cccf; border-radius: 6px; font-size: 14px;">
+          </div>
+
+          <div style="display: flex; flex-direction: column;">
+            <label style="font-size: 12px; font-weight: bold; color: #6d7175; margin-bottom: 6px; text-transform: uppercase;">Weight (lbs)</label>
+            <input type="number" id="paws-pet-weight-inline" min="0" max="300" step="0.1" style="padding: 10px; border: 1px solid #c9cccf; border-radius: 6px; font-size: 14px;">
+          </div>
+
+          <div style="display: flex; flex-direction: column;">
+            <label style="font-size: 12px; font-weight: bold; color: #6d7175; margin-bottom: 6px; text-transform: uppercase;">Activity Level</label>
+            <select id="paws-pet-activity-inline" style="padding: 10px; border: 1px solid #c9cccf; border-radius: 6px; font-size: 14px; background-color: #fff;">
+              <option value="low">Lazy / Low Activity 🛋️</option>
+              <option value="moderate" selected>Moderate Activity 🏃</option>
+              <option value="high">Highly Active / Working Dog ⚡</option>
+            </select>
+          </div>
+
+          <div style="display: flex; flex-direction: column; grid-column: span 2;">
+            <label style="font-size: 12px; font-weight: bold; color: #6d7175; margin-bottom: 6px; text-transform: uppercase;">Allergies (comma-separated)</label>
+            <input type="text" id="paws-pet-allergies-inline" placeholder="e.g. beef, chicken, grains" style="padding: 10px; border: 1px solid #c9cccf; border-radius: 6px; font-size: 14px;">
+          </div>
+
+          <div style="display: flex; flex-direction: column; grid-column: span 2;">
+            <label style="font-size: 12px; font-weight: bold; color: #6d7175; margin-bottom: 6px; text-transform: uppercase;">Health Issues / Joint logs</label>
+            <input type="text" id="paws-pet-health-inline" placeholder="e.g. arthritis, sensitive stomach, hip dysplasia" style="padding: 10px; border: 1px solid #c9cccf; border-radius: 6px; font-size: 14px;">
+          </div>
+
+          <!-- AWS S3 Secure Prescription Vault upload zone -->
+          <div id="paws-prescription-section-inline" style="grid-column: span 2; margin-top: 8px; border: 1px dashed #c9cccf; border-radius: 8px; padding: 14px; background-color: #fafbfc;">
+            <label style="font-size: 13px; font-weight: bold; color: #374151; display: block; margin-bottom: 4px;">🐾 Vet Prescription Upload Required</label>
+            <p style="margin: 0 0 10px 0; font-size: 12px; color: #6d7175; line-height: 1.3;">This product or your profile details indicate a veterinary prescription is required for formulation approvals. Please upload a PDF, PNG, or JPG copy of your active vet documentation.</p>
+            <input type="file" id="paws-prescription-file-inline" accept=".pdf,image/png,image/jpeg,image/jpg" style="font-size: 13px;">
+            <div id="paws-upload-progress-inline" style="font-size: 12px; color: #008060; margin-top: 6px; font-weight: bold; display: none;">Uploading prescription to secure AWS S3 vault...</div>
+          </div>
+
+        </div>
+
+        <div style="display: flex; gap: 12px; margin-top: 24px;">
+          <button type="submit" style="
+            flex: 2;
+            padding: 12px;
+            background-color: {{ block.settings.button_bg_color }};
+            color: {{ block.settings.button_text_color }};
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          ">💾 Save Pet Profile</button>
+          
+          <button type="button" id="paws-form-cancel-btn-inline" style="
+            flex: 1;
+            padding: 12px;
+            background-color: #f3f4f6;
+            color: #374151;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 15px;
+          ">Cancel</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- view 3: GUEST LOGIN GATED VIEW -->
+    <div id="paws-effect-guest-view-inline" style="display: none; text-align: center; padding: 10px 0;">
+      <h2 style="margin-top: 0; margin-bottom: 8px; font-size: 22px; color: {{ block.settings.button_bg_color }}; font-weight: bold;">Unlock Pet Formulation Portal 🔓</h2>
+      <p style="margin: 0 0 24px 0; font-size: 14px; color: #6d7175; line-height: 1.4;">Sign in to your customer account to create pet medical logs, upload active prescriptions, and unlock allergy-safe gated feeds.</p>
+      
+      <button id="paws-guest-login-btn-inline" style="
+        padding: 14px 28px;
+        background-color: {{ block.settings.button_bg_color }};
+        color: {{ block.settings.button_text_color }};
+        border: none;
+        border-radius: 8px;
+        font-weight: bold;
+        cursor: pointer;
+        font-size: 15px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      ">🐾 Secure Log In / Create Account</button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  (function() {
+    const form = document.getElementById("paws-effect-quiz-form-inline");
+    
+    // View Blocks
+    const listView = document.getElementById("paws-effect-list-view-inline");
+    const formView = document.getElementById("paws-effect-form-view-inline");
+    const guestView = document.getElementById("paws-effect-guest-view-inline");
+    const petsContainer = document.getElementById("paws-pets-inline-container");
+    
+    // Form buttons, files and titles
+    const formTitle = document.getElementById("paws-form-title-inline");
+    const cancelFormBtn = document.getElementById("paws-form-cancel-btn-inline");
+    const addNewPetBtn = document.getElementById("paws-add-new-pet-btn-inline");
+    const guestLoginBtn = document.getElementById("paws-guest-login-btn-inline");
+    const fileInput = document.getElementById("paws-prescription-file-inline");
+    const uploadProgress = document.getElementById("paws-upload-progress-inline");
+
+    // State Variables
+    let customerPets = [];
+    let editingPetId = null;
+    let uploadedPrescriptionKey = ""; // Stores S3 object key on upload success
+
+    const backendApiUrl = "{{ block.settings.api_url | default: 'https://paws-and-effect-git-develop-willowsoftstudio-5437s-projects.vercel.app' }}";
+
+    // Dynamic Shop Domain resolved dynamically via Shopify Liquid!
+    const shopDomain = "{{ shop.permanent_domain }}";
+
+    // Dynamic Prescription Checking based on Shopify Liquid Product variables!
+    const isPrescriptionRequired = {% if is_prescription_required %}true{% else %}false{% endif %};
+
+    // Shopify Logged-in Customer Checking
+    const isCustomerLoggedIn = {% if customer %}true{% else %}false{% endif %};
+    let customerId = "";
+
+    {% if customer %}
+      customerId = "gid://shopify/Customer/{{ customer.id }}";
+    {% else %}
+      customerId = "guest_visitor";
+    {% endif %}
+
+    // A. Real-Time API-Proxied File Upload Handler
+    if (fileInput) {
+      fileInput.addEventListener("change", (ev) => {
+        const file = ev.target.files[0];
+        if (!file) return;
+
+        if (uploadProgress) {
+          uploadProgress.innerText = "⏳ Securely uploading " + file.name + " to medical vault...";
+          uploadProgress.style.display = "block";
+        }
+
+        // Upload securely via our API Proxy
+        fetch(backendApiUrl + "/api/pets/upload-prescription?filename=" + encodeURIComponent(file.name), {
+          method: "POST",
+          headers: {
+            "Content-Type": file.type,
+            "x-test-session-id": "paws-portal-session",
+            "x-shop-domain": shopDomain,
+            "x-customer-id": customerId
+          },
+          body: file
+        })
+          .then(res => {
+            if (!res.ok) {
+              return res.json().then(err => { throw new Error(err.error || "Upload failed"); });
+            }
+            return res.json();
+          })
+          .then(data => {
+            if (data.success) {
+              uploadedPrescriptionKey = data.objectKey;
+              if (uploadProgress) uploadProgress.innerHTML = "✅ Prescription successfully uploaded to secure medical vault!";
+            } else {
+              throw new Error(data.error);
+            }
+          })
+          .catch(err => {
+            console.error("❌ Prescription Upload Error:", err);
+            if (uploadProgress) uploadProgress.innerHTML = "<span style='color: #991b1b;'>❌ Upload Failed: " + err.message + "</span>";
+          });
+      });
+    }
+
+    // 1. Fetch registered pets for customer on load
+    function loadCustomerPets() {
+      if (!isCustomerLoggedIn) {
+        if (listView) listView.style.display = "none";
+        if (formView) formView.style.display = "none";
+        if (guestView) guestView.style.display = "block";
+        return;
+      }
+
+      fetch(backendApiUrl + "/api/pets/" + encodeURIComponent(customerId) + "/recommendations", {
+        headers: {
+          "x-test-session-id": "paws-portal-session",
+          "x-shop-domain": shopDomain
+        }
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            customerPets = data.profiles || [];
+            renderPetsList();
+            
+            guestView.style.display = "none";
+            if (customerPets.length > 0) {
+              if (listView) listView.style.display = "block";
+              if (formView) formView.style.display = "none";
+            } else {
+              if (listView) listView.style.display = "none";
+              if (formView) formView.style.display = "block";
+            }
+          }
+        })
+        .catch(() => {});
+    }
+
+    // 2. Render Pet profiles List inside Grid Layout
+    function renderPetsList() {
+      if (!petsContainer) return;
+      if (customerPets.length === 0) {
+        petsContainer.innerHTML = `<div style="text-align: center; padding: 20px; color: #6d7175; font-size: 14px;">No pet profiles registered yet.</div>`;
+        return;
+      }
+
+      petsContainer.innerHTML = customerPets.map(pet => {
+        const petEmoji = pet.petType === 'dog' ? '🐶' : (pet.petType === 'cat' ? '🐱' : '🐾');
+        
+        return `
+          <div class="paws-inline-card">
+            <div style="text-align: left; margin-bottom: 12px;">
+              <span style="font-size: 26px; display: block; margin-bottom: 6px;">${petEmoji}</span>
+              <h3 style="margin: 0; font-size: 18px; color: #111827; font-weight: bold;">${pet.name}</h3>
+              <p style="margin: 4px 0 0 0; font-size: 12px; color: #6d7175; text-transform: capitalize;">${pet.breed || 'Unknown Breed'} • ${pet.age || 0} years</p>
+            </div>
+            
+            <div style="border-top: 1px solid #e1e3e5; padding-top: 12px; margin-top: auto; display: flex; gap: 8px; justify-content: flex-end;">
+              <button class="paws-edit-pet-btn" data-id="${pet.id}" style="
+                background: none;
+                border: 1px solid #d1d5db;
+                border-radius: 6px;
+                padding: 6px 12px;
+                font-size: 12px;
+                font-weight: bold;
+                cursor: pointer;
+                color: #374151;
+              ">✏️ Edit</button>
+              
+              <button class="paws-delete-pet-btn" data-id="${pet.id}" style="
+                background: #fef2f2;
+                border: 1px solid #fca5a5;
+                border-radius: 6px;
+                padding: 6px 12px;
+                font-size: 12px;
+                font-weight: bold;
+                cursor: pointer;
+                color: #991b1b;
+              ">🗑️ Delete</button>
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      // Bind edit events
+      document.querySelectorAll(".paws-edit-pet-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-id");
+          const pet = customerPets.find(p => p.id === id);
+          if (pet) launchEditForm(pet);
+        });
+      });
+
+      // Bind delete events
+      document.querySelectorAll(".paws-delete-pet-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-id");
+          if (confirm("Are you sure you want to delete this pet profile? All medical health logs will be permanently deleted.")) {
+            deletePetProfile(id);
+          }
+        });
+      });
+    }
+
+    // 3. Delete Pet Profile via API
+    function deletePetProfile(id) {
+      fetch(backendApiUrl + "/api/pets/profile/" + id, {
+        method: "DELETE",
+        headers: {
+          "x-test-session-id": "paws-portal-session",
+          "x-shop-domain": shopDomain
+        }
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            customerPets = customerPets.filter(p => p.id !== id);
+            renderPetsList();
+            if (customerPets.length > 0) {
+              listView.style.display = "block";
+              formView.style.display = "none";
+            } else {
+              listView.style.display = "none";
+              formView.style.display = "block";
+            }
+          }
+        });
+    }
+
+    // 4. Launch Quiz form in Edit mode
+    function launchEditForm(pet) {
+      editingPetId = pet.id;
+      formTitle.innerText = "✏️ Edit Pet Profile";
+      document.getElementById("paws-pet-name-inline").value = pet.name;
+      document.getElementById("paws-pet-type-inline").value = pet.petType;
+      document.getElementById("paws-pet-breed-inline").value = pet.breed || "";
+      document.getElementById("paws-pet-age-inline").value = pet.age || "";
+      document.getElementById("paws-pet-weight-inline").value = pet.weight || "";
+      document.getElementById("paws-pet-activity-inline").value = pet.activityLevel || "moderate";
+      document.getElementById("paws-pet-allergies-inline").value = (pet.allergies || []).join(", ");
+      document.getElementById("paws-pet-health-inline").value = (pet.healthIssues || []).join(", ");
+      
+      uploadedPrescriptionKey = pet.prescriptionUrl || "";
+      if (uploadProgress) {
+        if (uploadedPrescriptionKey) {
+          uploadProgress.innerHTML = "✅ Active prescription document found on file.";
+          uploadProgress.style.display = "block";
+        } else {
+          uploadProgress.style.display = "none";
+        }
+      }
+      if (fileInput) fileInput.value = "";
+
+      listView.style.display = "none";
+      formView.style.display = "block";
+    }
+
+    // Boot: load customer pets immediately on boot
+    loadCustomerPets();
+
+    // Guest login redirection handler
+    if (guestLoginBtn) {
+      guestLoginBtn.addEventListener("click", () => {
+        window.location.href = "/account/login?checkout_url=" + encodeURIComponent(window.location.href);
+      });
+    }
+
+    // Add New Pet Navigation
+    if (addNewPetBtn) {
+      addNewPetBtn.addEventListener("click", () => {
+        editingPetId = null;
+        formTitle.innerText = "🐾 Register Your Pet";
+        form.reset();
+        uploadedPrescriptionKey = "";
+        if (uploadProgress) uploadProgress.style.display = "none";
+        listView.style.display = "none";
+        formView.style.display = "block";
+      });
+    }
+
+    // Form cancel button handler
+    if (cancelFormBtn) {
+      cancelFormBtn.addEventListener("click", () => {
+        if (customerPets.length > 0) {
+          listView.style.display = "block";
+          formView.style.display = "none";
+        } else {
+          alert("Please register at least one pet profile to view your pets catalog.");
+        }
+      });
+    }
+
+    // E. Form submission handler
+    if (form) {
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+
+        const rawAge = parseInt(document.getElementById("paws-pet-age-inline").value) || 0;
+        const rawWeight = document.getElementById("paws-pet-weight-inline").value.replace(/[^0-9.]/g, "").replace(/(\..*?)\..*/g, "$1");
+
+        const payload = {
+          customerId,
+          name: document.getElementById("paws-pet-name-inline").value,
+          petType: document.getElementById("paws-pet-type-inline").value,
+          breed: document.getElementById("paws-pet-breed-inline").value,
+          age: rawAge,
+          weight: rawWeight,
+          activityLevel: document.getElementById("paws-pet-activity-inline").value,
+          allergies: document.getElementById("paws-pet-allergies-inline").value.split(",").map(s => s.trim()).filter(s => s !== ""),
+          healthIssues: document.getElementById("paws-pet-health-inline").value.split(",").map(s => s.trim()).filter(s => s !== ""),
+          prescriptionUrl: uploadedPrescriptionKey
+        };
+
+        const url = editingPetId 
+          ? backendApiUrl + "/api/pets/profile/" + editingPetId
+          : backendApiUrl + "/api/pets/profile";
+        
+        const method = editingPetId ? "PUT" : "POST";
+
+        fetch(url, {
+          method,
+          headers: {
+            "Content-Type": "application/json",
+            "x-test-session-id": "paws-portal-session",
+            "x-shop-domain": shopDomain
+          },
+          body: JSON.stringify(payload)
+        })
+          .then(res => {
+            if (res.status === 403) {
+              return res.json().then(err => {
+                alert("🔒 Limit: " + err.message);
+                throw new Error(err.message);
+              });
+            }
+            return res.json();
+          })
+          .then(data => {
+            if (data.success) {
+              alert("🐾 Pet Profile saved successfully!");
+              loadCustomerPets();
+            }
+          })
+          .catch(err => {
+            console.error("❌ Paws & Effect API Connection Error:", err);
+            alert("❌ Connection Error: Failed to save pet profile. Please check your internet connection.");
+          });
+      });
+    }
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "Pet Profile Quiz (Inline)",
+  "target": "section",
+  "templates": ["index", "product", "cart", "page"],
+  "settings": [
+    {
+      "type": "text",
+      "id": "api_url",
+      "label": "Backend API URL",
+      "default": "https://paws-and-effect-git-develop-willowsoftstudio-5437s-projects.vercel.app"
+    },
+    {
+      "type": "select",
+      "id": "columns_desktop",
+      "label": "Inline Grid Columns",
+      "options": [
+        { "value": "1", "label": "1 Column" },
+        { "value": "2", "label": "2 Columns" },
+        { "value": "3", "label": "3 Columns" }
+      ],
+      "default": "1"
+    },
+    {
+      "type": "color",
+      "id": "button_bg_color",
+      "label": "Primary Button Color",
+      "default": "#111827"
+    },
+    {
+      "type": "color",
+      "id": "button_text_color",
+      "label": "Primary Button Text Color",
+      "default": "#ffffff"
+    }
+  ]
+}
+{% endschema %}
