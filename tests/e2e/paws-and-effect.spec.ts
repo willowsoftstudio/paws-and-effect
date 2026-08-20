@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "../../web/backend/prisma-client/index.js";
 
 const prisma = new PrismaClient();
 

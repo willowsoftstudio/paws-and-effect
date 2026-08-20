@@ -272,6 +272,7 @@
     const displayMode = "{{ block.settings.display_mode }}";
     const embedLayout = "{{ block.settings.embed_layout }}";
     const popupDelay = {{ block.settings.popup_delay }} * 1000;
+    const backendApiUrl = "{{ block.settings.api_url | default: 'https://paws-and-effect-git-develop-willowsoftstudio-5437s-projects.vercel.app' }}";
 
     // Dynamic Shop Domain resolved dynamically via Shopify Liquid!
     const shopDomain = "{{ shop.permanent_domain }}";
@@ -289,8 +290,12 @@
       customerId = "guest_visitor";
     {% endif %}
 
-    // No portal relocation needed - CSS and positioning handle both modes
-    // This avoids DOM manipulation issues in the theme editor
+    // Portal relocation: Move modal block directly to document.body so it overlays perfectly over page content
+    if (embedLayout !== "inline") {
+      if (modal && modal.parentNode !== document.body) {
+        document.body.appendChild(modal);
+      }
+    }
 
     // A. Real-Time API-Proxied File Upload Handler
     if (fileInput) {
@@ -304,7 +309,7 @@
         }
 
         // Upload securely via our API Proxy (No S3 CORS or exposing S3 directly!)
-        fetch("https://paws-and-effect-git-develop-willowsoftstudio-5437s-projects.vercel.app/api/pets/upload-prescription?filename=" + encodeURIComponent(file.name), {
+        fetch(backendApiUrl + "/api/pets/upload-prescription?filename=" + encodeURIComponent(file.name), {
           method: "POST",
           headers: {
             "Content-Type": file.type,
@@ -347,7 +352,7 @@
         return;
       }
 
-      fetch("https://paws-and-effect-git-develop-willowsoftstudio-5437s-projects.vercel.app/api/pets/" + encodeURIComponent(customerId) + "/recommendations", {
+      fetch(backendApiUrl + "/api/pets/" + encodeURIComponent(customerId) + "/recommendations", {
         headers: {
           "x-test-session-id": "paws-portal-session",
           "x-shop-domain": shopDomain
@@ -451,7 +456,7 @@
 
     // 3. Delete Pet Profile via API
     function deletePetProfile(id) {
-      fetch("https://paws-and-effect-git-develop-willowsoftstudio-5437s-projects.vercel.app/api/pets/profile/" + id, {
+      fetch(backendApiUrl + "/api/pets/profile/" + id, {
         method: "DELETE",
         headers: {
           "x-test-session-id": "paws-portal-session",
@@ -673,8 +678,8 @@
         };
 
         const url = editingPetId 
-          ? "https://paws-and-effect-git-develop-willowsoftstudio-5437s-projects.vercel.app/api/pets/profile/" + editingPetId
-          : "https://paws-and-effect-git-develop-willowsoftstudio-5437s-projects.vercel.app/api/pets/profile";
+          ? backendApiUrl + "/api/pets/profile/" + editingPetId
+          : backendApiUrl + "/api/pets/profile";
         
         const method = editingPetId ? "PUT" : "POST";
 
@@ -719,6 +724,12 @@
   "target": "section",
   "templates": ["index", "product", "cart", "page"],
   "settings": [
+    {
+      "type": "text",
+      "id": "api_url",
+      "label": "Backend API URL",
+      "default": "https://paws-and-effect-git-develop-willowsoftstudio-5437s-projects.vercel.app"
+    },
     {
       "type": "select",
       "id": "embed_layout",

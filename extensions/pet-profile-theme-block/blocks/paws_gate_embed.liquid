@@ -128,7 +128,7 @@
     let customerId = isCustomerLoggedIn ? "gid://shopify/Customer/{{ customer.id }}" : "guest_visitor";
     const activeProductTitle = "{{ product.title | escape }}";
 
-    // Dynamically load Backend API URL from block settings (defaults to remote develop staging)
+    // Dynamically load Backend API URL from block settings
     const backendApiUrl = "{{ block.settings.api_url | default: 'https://paws-and-effect-git-develop-willowsoftstudio-5437s-projects.vercel.app' }}";
 
     // Ensure app embed modal overlays are relocated directly to document.body
